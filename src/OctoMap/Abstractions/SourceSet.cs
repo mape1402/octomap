@@ -43,12 +43,25 @@ namespace OctoMap
         /// <returns>The matching source instance.</returns>
         public TSource Get<TSource>()
         {
+            TSource match = default;
+            var found = false;
             foreach (var source in _sources)
             {
                 if (source is TSource typedSource)
                 {
-                    return typedSource;
+                    if (found)
+                    {
+                        throw new InvalidOperationException($"Source set contains more than one source assignable to '{typeof(TSource).FullName}'.");
+                    }
+
+                    match = typedSource;
+                    found = true;
                 }
+            }
+
+            if (found)
+            {
+                return match;
             }
 
             throw new InvalidOperationException($"Source set does not contain a source assignable to '{typeof(TSource).FullName}'.");

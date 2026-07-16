@@ -41,11 +41,51 @@ namespace OctoMap.Tests
             Assert.Contains("must be registered explicitly", exception.Message);
         }
 
+        [Fact]
+        public void Source_Set_Rejects_Ambiguous_Type_Lookups()
+        {
+            var sources = SourceSet.Of(new AmbiguousOrder(), new SpecialAmbiguousOrder());
+
+            var exception = Assert.Throws<InvalidOperationException>(() => sources.Get<AmbiguousOrder>());
+
+            Assert.Contains("more than one source assignable", exception.Message);
+        }
+
+        [Fact]
+        public void Multi_Source_Validation_Rejects_Duplicate_Destination_Members()
+        {
+            var configuration = BuildConfiguration<DuplicateDestinationProfile>();
+
+            var report = configuration.Validate();
+
+            Assert.False(report.IsValid);
+            Assert.Contains(report.Issues, x => x.Message.Contains("configured more than once", StringComparison.Ordinal));
+        }
+
+        [Fact]
+        public void Multi_Source_Validation_Rejects_Ambiguous_Context_Source()
+        {
+            var configuration = BuildConfiguration<AmbiguousContextProfile>();
+
+            var report = configuration.Validate();
+
+            Assert.False(report.IsValid);
+            Assert.Contains(report.Issues, x => x.Message.Contains("more than one source assignable", StringComparison.Ordinal));
+        }
+
         private static ServiceProvider CreateProvider()
         {
             var services = new ServiceCollection();
             services.AddOctoMap(typeof(MultiSourceProfile).Assembly);
             return services.BuildServiceProvider();
+        }
+
+        private static IOctoMapConfiguration BuildConfiguration<TProfile>()
+            where TProfile : OctoMapProfile, new()
+        {
+            var builder = new OctoMap.Configuration.OctoMapConfigurationBuilder();
+            new TProfile().Configure(builder);
+            return builder.Build();
         }
 
         public sealed class MultiSourceProfile : OctoMapProfile
@@ -91,6 +131,50 @@ namespace OctoMap.Tests
         public sealed class UnconfiguredMultiSourceDto
         {
             public int Id { get; set; }
+        }
+
+        public class AmbiguousOrder
+        {
+            public string Code { get; set; }
+        }
+
+        public sealed class SpecialAmbiguousOrder : AmbiguousOrder
+        {
+        }
+
+        public sealed class AmbiguousCustomer
+        {
+            public string Name { get; set; }
+        }
+
+        public sealed class AmbiguousDto
+        {
+            public string Label { get; set; }
+        }
+
+        public sealed class DuplicateDestinationProfile : OctoMapProfile
+        {
+            public override void Configure(IOctoMapConfigurationBuilder builder)
+            {
+                builder.CreateMultiMap<AmbiguousDto>()
+                    .From<AmbiguousOrder>(map => map
+                        .ForMember(x => x.Label, x => x.MapFrom(s => s.Code)))
+                    .From<AmbiguousCustomer>(map => map
+                        .ForMember(x => x.Label, x => x.MapFrom(s => s.Name)));
+            }
+        }
+
+        public sealed class AmbiguousContextProfile : OctoMapProfile
+        {
+            public override void Configure(IOctoMapConfigurationBuilder builder)
+            {
+                builder.CreateMultiMap<AmbiguousDto>()
+                    .From<AmbiguousOrder>(map => map
+                        .ForMember(x => x.Label, x => x.MapFrom(s => s.Code)))
+                    .From<SpecialAmbiguousOrder>(map => map
+                        .ForMember(x => x.Label, x => x.UseValue("special")))
+                    .ForMember(x => x.Label, x => x.MapFrom(ctx => ctx.Get<AmbiguousOrder>().Code));
+            }
         }
     }
 }

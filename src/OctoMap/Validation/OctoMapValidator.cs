@@ -155,6 +155,8 @@ namespace OctoMap.Validation
                 return;
             }
 
+            ValidateDuplicateMultiSourceDestinations(map, issues);
+
             foreach (var sourceMap in map.SourceMaps)
             {
                 foreach (var memberMap in sourceMap.MemberMaps.Values)
@@ -262,10 +264,55 @@ namespace OctoMap.Validation
             }
 
             var requestedType = expression.Method.GetGenericArguments()[0];
-            if (!map.SourceTypes.Any(requestedType.IsAssignableFrom))
+            var matchingSources = map.SourceTypes.Where(requestedType.IsAssignableFrom).ToArray();
+            if (matchingSources.Length == 0)
             {
                 issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"Multi-source map does not declare source type '{requestedType.FullName}'."));
+                return;
             }
+
+            if (matchingSources.Length > 1)
+            {
+                issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"Multi-source map has more than one source assignable to '{requestedType.FullName}'."));
+            }
+        }
+
+        private static void ValidateDuplicateMultiSourceDestinations(MultiSourceTypeMap map, List<OctoMapValidationIssue> issues)
+        {
+            var configuredMembers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var sourceMap in map.SourceMaps)
+            {
+                foreach (var memberMap in sourceMap.MemberMaps.Values)
+                {
+                    if (memberMap.IsIgnored)
+                    {
+                        continue;
+                    }
+
+                    AddConfiguredMember(map, memberMap.DestinationProperty.Name, $"source '{sourceMap.SourceType.FullName}'", configuredMembers, issues);
+                }
+            }
+
+            foreach (var memberMap in map.ContextMemberMaps.Values)
+            {
+                AddConfiguredMember(map, memberMap.DestinationProperty.Name, "multi-source context", configuredMembers, issues);
+            }
+        }
+
+        private static void AddConfiguredMember(
+            ITypeMap map,
+            string memberName,
+            string sourceDescription,
+            Dictionary<string, string> configuredMembers,
+            List<OctoMapValidationIssue> issues)
+        {
+            if (configuredMembers.TryGetValue(memberName, out var previousSource))
+            {
+                issues.Add(CreateIssue(map, memberName, $"Destination member '{memberName}' is configured more than once in multi-source map: {previousSource} and {sourceDescription}."));
+                return;
+            }
+
+            configuredMembers[memberName] = sourceDescription;
         }
 
         private static void ValidateValue(
