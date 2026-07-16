@@ -1,0 +1,23 @@
+namespace OctoMap.Samples.Basic.Models
+{
+    /// <summary>
+    /// Represents a sample order destination model.
+    /// </summary>
+    public sealed class OrderDto
+    {
+        /// <summary>
+        /// Gets or sets the order identifier.
+        /// </summary>
+        public int Id { get; set; }
+
+        /// <summary>
+        /// Gets or sets the order status.
+        /// </summary>
+        public string Status { get; set; }
+
+        /// <summary>
+        /// Gets or sets the order description.
+        /// </summary>
+        public string Description { get; set; }
+    }
+}

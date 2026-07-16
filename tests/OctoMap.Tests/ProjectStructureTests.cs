@@ -7,5 +7,31 @@ namespace OctoMap.Tests
         {
             Assert.Equal("OctoMap", typeof(OctoMapMarker).Assembly.GetName().Name);
         }
+
+        [Fact]
+        public void Dynabee_Backend_Uses_Dynabee_Abstractions()
+        {
+            var sourcePath = Path.GetFullPath(Path.Combine(
+                AppContext.BaseDirectory,
+                "..",
+                "..",
+                "..",
+                "..",
+                "..",
+                "src",
+                "OctoMap",
+                "Generation",
+                "Dynabee",
+                "DynabeeMappingGenerationBackend.cs"));
+            var source = File.ReadAllText(sourcePath);
+
+            Assert.DoesNotContain("DynaBeeBuilder", source, StringComparison.Ordinal);
+            Assert.DoesNotContain("Activator.CreateInstance", source, StringComparison.Ordinal);
+            Assert.DoesNotContain("ILGenerator", source, StringComparison.Ordinal);
+            Assert.DoesNotContain("OpCodes", source, StringComparison.Ordinal);
+            Assert.Contains("IDynaBeeAssemblyBuilderFactory", source, StringComparison.Ordinal);
+            Assert.Contains("EmitsBody", source, StringComparison.Ordinal);
+            Assert.Contains("CreateInstance", source, StringComparison.Ordinal);
+        }
     }
 }

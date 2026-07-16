@@ -1,5 +1,7 @@
 using System.Reflection;
+using DynaBee.FluentApi.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using OctoMap.Configuration;
 using OctoMap.DependencyInjection;
 using OctoMap.Generation;
@@ -53,6 +55,7 @@ namespace OctoMap
             services.AddSingleton<IOctoMapProfileDiscovery, OctoMapProfileDiscovery>();
             services.AddSingleton<IOctoMapValidator, OctoMapValidator>();
             services.AddSingleton<IMappingPlanBuilder, ConventionMappingPlanBuilder>();
+            services.TryAddSingleton<IDynaBeeAssemblyBuilderFactory, DynaBeeAssemblyBuilderFactory>();
             services.AddSingleton<IMappingGenerationBackend, DynabeeMappingGenerationBackend>();
             services.AddSingleton<ICompiledMapRegistry, CompiledMapRegistry>();
             services.AddSingleton<IMapContextFactory, MapContextFactory>();

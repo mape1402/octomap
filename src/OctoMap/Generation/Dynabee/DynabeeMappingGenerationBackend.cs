@@ -1,7 +1,8 @@
-using System.Reflection.Emit;
 using System.Linq.Expressions;
 using System.Reflection;
 using DynaBee.FluentApi;
+using DynaBee.FluentApi.Body;
+using DynaBee.FluentApi.DependencyInjection;
 using OctoMap.Planning;
 
 namespace OctoMap.Generation.Dynabee
@@ -11,7 +12,17 @@ namespace OctoMap.Generation.Dynabee
     /// </summary>
     internal sealed class DynabeeMappingGenerationBackend : IMappingGenerationBackend
     {
+        private readonly IDynaBeeAssemblyBuilderFactory _builderFactory;
         private int _sequence;
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="DynabeeMappingGenerationBackend"/> class.
+        /// </summary>
+        /// <param name="builderFactory">The DynaBee assembly builder factory.</param>
+        public DynabeeMappingGenerationBackend(IDynaBeeAssemblyBuilderFactory builderFactory)
+        {
+            _builderFactory = builderFactory ?? throw new ArgumentNullException(nameof(builderFactory));
+        }
 
         /// <inheritdoc/>
         public string Name => "Dynabee";
@@ -30,8 +41,8 @@ namespace OctoMap.Generation.Dynabee
 
             var className = BuildClassName(plan);
             var mapperInterface = typeof(IOctoMapper<,>).MakeGenericType(plan.SourceType, plan.DestinationType);
-            var context = DynaBeeBuilder
-                .CreateAssembly($"OctoMap.Generated.{Interlocked.Increment(ref _sequence)}")
+            var context = _builderFactory
+                .Create($"OctoMap.Generated.{Interlocked.Increment(ref _sequence)}")
                 .DisableCache()
                 .AddClass(className, c => c
                     .Implements(mapperInterface, false)
@@ -39,12 +50,11 @@ namespace OctoMap.Generation.Dynabee
                     .AddMethod(nameof(IOctoMapper<object, object>.Map), plan.DestinationType, m => m
                         .WithParameter("source", plan.SourceType)
                         .WithParameter<IMapContext>("context")
-                        .Emits(il => EmitMapMethod(il, plan))))
+                        .EmitsBody(body => EmitMapMethod(body, plan))))
                 .Build();
 
-            var mapperType = context.Find(className).ClrType;
-            var mapper = Activator.CreateInstance(mapperType);
-            return new CompiledMap(mapper, mapperType);
+            var mapper = context.CreateInstance(className);
+            return new CompiledMap(mapper, mapper.GetType());
         }
 
         private static string BuildClassName(MappingPlan plan)
@@ -60,281 +70,162 @@ namespace OctoMap.Generation.Dynabee
             return new string(chars);
         }
 
-        private static void EmitMapMethod(ILGenerator il, MappingPlan plan)
+        private static void EmitMapMethod(IBeeMethodBodyBuilder body, MappingPlan plan)
         {
-            var destinationLocal = il.DeclareLocal(plan.DestinationType);
+            var source = body.Parameter("source");
+            var destination = body.DeclareLocal("destination", plan.DestinationType);
 
             if (!plan.SourceType.IsValueType)
             {
-                var sourceNotNull = il.DefineLabel();
-                il.Emit(OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Brtrue_S, sourceNotNull);
-                EmitDefault(il, plan.DestinationType);
-                il.Emit(OpCodes.Ret);
-                il.MarkLabel(sourceNotNull);
+                body.If(
+                    body.IsNull(source),
+                    whenTrue => whenTrue.Return(body.Default(plan.DestinationType)));
             }
 
-            EmitCreateDestination(il, plan.DestinationType, destinationLocal);
+            body.Assign(destination, CreateDestination(body, plan.DestinationType));
 
             foreach (var assignment in plan.Assignments)
             {
-                il.Emit(OpCodes.Ldloc, destinationLocal);
-                EmitAssignmentValue(il, assignment);
-                il.Emit(OpCodes.Callvirt, assignment.DestinationProperty.SetMethod);
+                var target = body.Property(destination, assignment.DestinationProperty.Name);
+                var value = BuildAssignmentValue(body, source, assignment);
+                body.Assign(target, value);
             }
 
-            il.Emit(OpCodes.Ldloc, destinationLocal);
-            il.Emit(OpCodes.Ret);
+            body.Return(destination);
         }
 
-        private static void EmitAssignmentValue(ILGenerator il, MemberAssignmentPlan assignment)
+        private static IBeeValueExpression CreateDestination(IBeeMethodBodyBuilder body, Type destinationType)
         {
+            return destinationType.IsValueType
+                ? body.Default(destinationType)
+                : body.New(destinationType);
+        }
+
+        private static IBeeValueExpression BuildAssignmentValue(
+            IBeeMethodBodyBuilder body,
+            IBeeValueExpression source,
+            MemberAssignmentPlan assignment)
+        {
+            IBeeValueExpression value;
             if (assignment.HasConstantValue)
             {
-                EmitConstantValue(il, assignment.ConstantValue, assignment.DestinationProperty.PropertyType);
+                value = body.Constant(assignment.ConstantValue, assignment.DestinationProperty.PropertyType);
             }
             else if (assignment.SourceExpression != null)
             {
-                EmitExpression(il, assignment.SourceExpression.Body, assignment.SourceExpression.Parameters[0]);
+                value = BuildExpression(body, source, assignment.SourceExpression.Body, assignment.SourceExpression.Parameters[0]);
             }
             else
             {
-                il.Emit(OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Callvirt, assignment.SourceProperty.GetMethod);
+                value = body.Property(source, assignment.SourceProperty.Name);
             }
 
             if (assignment.HasNullSubstitute)
             {
-                EmitNullSubstitute(il, assignment);
+                value = ApplyNullSubstitute(body, value, assignment);
             }
+
+            return value.Type == assignment.DestinationProperty.PropertyType
+                ? value
+                : body.Convert(value, assignment.DestinationProperty.PropertyType);
         }
 
-        private static void EmitExpression(ILGenerator il, Expression expression, ParameterExpression sourceParameter)
+        private static IBeeValueExpression BuildExpression(
+            IBeeMethodBodyBuilder body,
+            IBeeValueExpression source,
+            Expression expression,
+            ParameterExpression sourceParameter)
         {
             switch (expression)
             {
                 case ParameterExpression parameter when ReferenceEquals(parameter, sourceParameter):
-                    il.Emit(OpCodes.Ldarg_1);
-                    return;
+                    return source;
                 case MemberExpression member:
-                    EmitMemberExpression(il, member, sourceParameter);
-                    return;
+                    return BuildMemberExpression(body, source, member, sourceParameter);
                 case ConstantExpression constant:
-                    EmitConstant(il, constant);
-                    return;
+                    return body.Constant(constant.Value, constant.Type);
                 case BinaryExpression binary:
-                    EmitBinaryExpression(il, binary, sourceParameter);
-                    return;
+                    return BuildBinaryExpression(body, source, binary, sourceParameter);
                 case UnaryExpression unary when unary.NodeType == ExpressionType.Convert || unary.NodeType == ExpressionType.ConvertChecked:
-                    EmitExpression(il, unary.Operand, sourceParameter);
-                    EmitConversion(il, unary.Operand.Type, unary.Type);
-                    return;
+                    return body.Convert(BuildExpression(body, source, unary.Operand, sourceParameter), unary.Type);
+                case ConditionalExpression conditional:
+                    return body.If(
+                        BuildExpression(body, source, conditional.Test, sourceParameter),
+                        BuildExpression(body, source, conditional.IfTrue, sourceParameter),
+                        BuildExpression(body, source, conditional.IfFalse, sourceParameter));
                 default:
                     throw new NotSupportedException($"Expression node '{expression.NodeType}' is not supported by OctoMap Phase 2.");
             }
         }
 
-        private static void EmitMemberExpression(ILGenerator il, MemberExpression expression, ParameterExpression sourceParameter)
+        private static IBeeValueExpression BuildMemberExpression(
+            IBeeMethodBodyBuilder body,
+            IBeeValueExpression source,
+            MemberExpression expression,
+            ParameterExpression sourceParameter)
         {
-            if (expression.Expression != null)
-            {
-                EmitExpression(il, expression.Expression, sourceParameter);
-            }
-
             if (expression.Member is PropertyInfo property)
             {
-                il.Emit(property.GetMethod.IsVirtual ? OpCodes.Callvirt : OpCodes.Call, property.GetMethod);
-                return;
+                if (expression.Expression == null)
+                {
+                    return body.StaticProperty(property.DeclaringType, property.Name);
+                }
+
+                return body.Property(BuildExpression(body, source, expression.Expression, sourceParameter), property.Name);
             }
 
             if (expression.Member is FieldInfo field)
             {
-                il.Emit(field.IsStatic ? OpCodes.Ldsfld : OpCodes.Ldfld, field);
-                return;
+                if (expression.Expression == null)
+                {
+                    return body.StaticField(field.DeclaringType, field.Name);
+                }
+
+                return body.Field(BuildExpression(body, source, expression.Expression, sourceParameter), field.Name);
             }
 
             throw new NotSupportedException($"Member '{expression.Member.Name}' is not supported by OctoMap Phase 2.");
         }
 
-        private static void EmitBinaryExpression(ILGenerator il, BinaryExpression expression, ParameterExpression sourceParameter)
+        private static IBeeValueExpression BuildBinaryExpression(
+            IBeeMethodBodyBuilder body,
+            IBeeValueExpression source,
+            BinaryExpression expression,
+            ParameterExpression sourceParameter)
         {
-            EmitExpression(il, expression.Left, sourceParameter);
-            EmitExpression(il, expression.Right, sourceParameter);
-
-            if (expression.Method != null)
-            {
-                il.Emit(expression.Method.IsVirtual ? OpCodes.Callvirt : OpCodes.Call, expression.Method);
-                return;
-            }
-
             switch (expression.NodeType)
             {
                 case ExpressionType.Add:
-                    il.Emit(OpCodes.Add);
-                    return;
+                    return body.Add(
+                        BuildExpression(body, source, expression.Left, sourceParameter),
+                        BuildExpression(body, source, expression.Right, sourceParameter));
+                case ExpressionType.Equal:
+                    return body.Equal(
+                        BuildExpression(body, source, expression.Left, sourceParameter),
+                        BuildExpression(body, source, expression.Right, sourceParameter));
+                case ExpressionType.NotEqual:
+                    return body.NotEqual(
+                        BuildExpression(body, source, expression.Left, sourceParameter),
+                        BuildExpression(body, source, expression.Right, sourceParameter));
                 default:
                     throw new NotSupportedException($"Binary expression '{expression.NodeType}' is not supported by OctoMap Phase 2.");
             }
         }
 
-        private static void EmitConstant(ILGenerator il, ConstantExpression expression)
+        private static IBeeValueExpression ApplyNullSubstitute(
+            IBeeMethodBodyBuilder body,
+            IBeeValueExpression value,
+            MemberAssignmentPlan assignment)
         {
-            if (expression.Value == null)
-            {
-                il.Emit(OpCodes.Ldnull);
-                return;
-            }
-
-            if (expression.Value is string text)
-            {
-                il.Emit(OpCodes.Ldstr, text);
-                return;
-            }
-
-            if (expression.Value is int intValue)
-            {
-                il.Emit(OpCodes.Ldc_I4, intValue);
-                return;
-            }
-
-            if (expression.Value is bool boolValue)
-            {
-                il.Emit(boolValue ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
-                return;
-            }
-
-            throw new NotSupportedException($"Constant type '{expression.Value.GetType().FullName}' is not supported by OctoMap Phase 2.");
-        }
-
-        private static void EmitConstantValue(ILGenerator il, object value, Type targetType)
-        {
-            if (value == null)
-            {
-                il.Emit(OpCodes.Ldnull);
-                return;
-            }
-
-            if (value is string text)
-            {
-                il.Emit(OpCodes.Ldstr, text);
-                return;
-            }
-
-            if (value is int intValue)
-            {
-                il.Emit(OpCodes.Ldc_I4, intValue);
-                return;
-            }
-
-            if (value is bool boolValue)
-            {
-                il.Emit(boolValue ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
-                return;
-            }
-
-            if (value is decimal decimalValue)
-            {
-                EmitDecimalConstant(il, decimalValue);
-                return;
-            }
-
-            throw new NotSupportedException($"Constant type '{value.GetType().FullName}' is not supported for member type '{targetType.FullName}'.");
-        }
-
-        private static void EmitNullSubstitute(ILGenerator il, MemberAssignmentPlan assignment)
-        {
-            var memberType = assignment.DestinationProperty.PropertyType;
-            if (memberType.IsValueType)
+            if (assignment.DestinationProperty.PropertyType.IsValueType)
             {
                 throw new NotSupportedException("NullSubstitute for value types is not supported yet.");
             }
 
-            var valueLocal = il.DeclareLocal(memberType);
-            var valueIsNotNull = il.DefineLabel();
-            var end = il.DefineLabel();
-
-            il.Emit(OpCodes.Stloc, valueLocal);
-            il.Emit(OpCodes.Ldloc, valueLocal);
-            il.Emit(OpCodes.Brtrue_S, valueIsNotNull);
-            EmitConstantValue(il, assignment.NullSubstitute, memberType);
-            il.Emit(OpCodes.Br_S, end);
-            il.MarkLabel(valueIsNotNull);
-            il.Emit(OpCodes.Ldloc, valueLocal);
-            il.MarkLabel(end);
-        }
-
-        private static void EmitDecimalConstant(ILGenerator il, decimal value)
-        {
-            var bits = decimal.GetBits(value);
-            var constructor = typeof(decimal).GetConstructor(new[]
-            {
-                typeof(int),
-                typeof(int),
-                typeof(int),
-                typeof(bool),
-                typeof(byte)
-            });
-
-            il.Emit(OpCodes.Ldc_I4, bits[0]);
-            il.Emit(OpCodes.Ldc_I4, bits[1]);
-            il.Emit(OpCodes.Ldc_I4, bits[2]);
-            il.Emit((bits[3] & unchecked((int)0x80000000)) != 0 ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Ldc_I4, (bits[3] >> 16) & 0x7F);
-            il.Emit(OpCodes.Newobj, constructor);
-        }
-
-        private static void EmitConversion(ILGenerator il, Type fromType, Type toType)
-        {
-            if (fromType == toType)
-            {
-                return;
-            }
-
-            if (toType == typeof(object))
-            {
-                if (fromType.IsValueType)
-                {
-                    il.Emit(OpCodes.Box, fromType);
-                }
-
-                return;
-            }
-
-            if (!toType.IsValueType)
-            {
-                il.Emit(OpCodes.Castclass, toType);
-                return;
-            }
-
-            throw new NotSupportedException($"Conversion from '{fromType.FullName}' to '{toType.FullName}' is not supported by OctoMap Phase 2.");
-        }
-
-        private static void EmitCreateDestination(ILGenerator il, Type destinationType, LocalBuilder destinationLocal)
-        {
-            if (destinationType.IsValueType)
-            {
-                il.Emit(OpCodes.Ldloca_S, destinationLocal);
-                il.Emit(OpCodes.Initobj, destinationType);
-                return;
-            }
-
-            var constructor = destinationType.GetConstructor(Type.EmptyTypes);
-            il.Emit(OpCodes.Newobj, constructor);
-            il.Emit(OpCodes.Stloc, destinationLocal);
-        }
-
-        private static void EmitDefault(ILGenerator il, Type type)
-        {
-            if (!type.IsValueType)
-            {
-                il.Emit(OpCodes.Ldnull);
-                return;
-            }
-
-            var local = il.DeclareLocal(type);
-            il.Emit(OpCodes.Ldloca_S, local);
-            il.Emit(OpCodes.Initobj, type);
-            il.Emit(OpCodes.Ldloc, local);
+            return body.If(
+                body.IsNull(value),
+                body.Constant(assignment.NullSubstitute, assignment.DestinationProperty.PropertyType),
+                value);
         }
     }
 }
