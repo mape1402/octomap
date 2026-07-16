@@ -89,14 +89,24 @@ namespace OctoMap.Generation.Dynabee
 
         private static void EmitAssignmentValue(ILGenerator il, MemberAssignmentPlan assignment)
         {
-            if (assignment.SourceExpression != null)
+            if (assignment.HasConstantValue)
+            {
+                EmitConstantValue(il, assignment.ConstantValue, assignment.DestinationProperty.PropertyType);
+            }
+            else if (assignment.SourceExpression != null)
             {
                 EmitExpression(il, assignment.SourceExpression.Body, assignment.SourceExpression.Parameters[0]);
-                return;
+            }
+            else
+            {
+                il.Emit(OpCodes.Ldarg_1);
+                il.Emit(OpCodes.Callvirt, assignment.SourceProperty.GetMethod);
             }
 
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Callvirt, assignment.SourceProperty.GetMethod);
+            if (assignment.HasNullSubstitute)
+            {
+                EmitNullSubstitute(il, assignment);
+            }
         }
 
         private static void EmitExpression(ILGenerator il, Expression expression, ParameterExpression sourceParameter)
@@ -194,6 +204,83 @@ namespace OctoMap.Generation.Dynabee
             }
 
             throw new NotSupportedException($"Constant type '{expression.Value.GetType().FullName}' is not supported by OctoMap Phase 2.");
+        }
+
+        private static void EmitConstantValue(ILGenerator il, object value, Type targetType)
+        {
+            if (value == null)
+            {
+                il.Emit(OpCodes.Ldnull);
+                return;
+            }
+
+            if (value is string text)
+            {
+                il.Emit(OpCodes.Ldstr, text);
+                return;
+            }
+
+            if (value is int intValue)
+            {
+                il.Emit(OpCodes.Ldc_I4, intValue);
+                return;
+            }
+
+            if (value is bool boolValue)
+            {
+                il.Emit(boolValue ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+                return;
+            }
+
+            if (value is decimal decimalValue)
+            {
+                EmitDecimalConstant(il, decimalValue);
+                return;
+            }
+
+            throw new NotSupportedException($"Constant type '{value.GetType().FullName}' is not supported for member type '{targetType.FullName}'.");
+        }
+
+        private static void EmitNullSubstitute(ILGenerator il, MemberAssignmentPlan assignment)
+        {
+            var memberType = assignment.DestinationProperty.PropertyType;
+            if (memberType.IsValueType)
+            {
+                throw new NotSupportedException("NullSubstitute for value types is not supported yet.");
+            }
+
+            var valueLocal = il.DeclareLocal(memberType);
+            var valueIsNotNull = il.DefineLabel();
+            var end = il.DefineLabel();
+
+            il.Emit(OpCodes.Stloc, valueLocal);
+            il.Emit(OpCodes.Ldloc, valueLocal);
+            il.Emit(OpCodes.Brtrue_S, valueIsNotNull);
+            EmitConstantValue(il, assignment.NullSubstitute, memberType);
+            il.Emit(OpCodes.Br_S, end);
+            il.MarkLabel(valueIsNotNull);
+            il.Emit(OpCodes.Ldloc, valueLocal);
+            il.MarkLabel(end);
+        }
+
+        private static void EmitDecimalConstant(ILGenerator il, decimal value)
+        {
+            var bits = decimal.GetBits(value);
+            var constructor = typeof(decimal).GetConstructor(new[]
+            {
+                typeof(int),
+                typeof(int),
+                typeof(int),
+                typeof(bool),
+                typeof(byte)
+            });
+
+            il.Emit(OpCodes.Ldc_I4, bits[0]);
+            il.Emit(OpCodes.Ldc_I4, bits[1]);
+            il.Emit(OpCodes.Ldc_I4, bits[2]);
+            il.Emit((bits[3] & unchecked((int)0x80000000)) != 0 ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldc_I4, (bits[3] >> 16) & 0x7F);
+            il.Emit(OpCodes.Newobj, constructor);
         }
 
         private static void EmitConversion(ILGenerator il, Type fromType, Type toType)

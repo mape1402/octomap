@@ -44,7 +44,7 @@ namespace OctoMap
             configureOptions?.Invoke(options);
 
             var discovery = new OctoMapProfileDiscovery();
-            var configuration = BuildConfiguration(discovery.Discover(profileAssemblies));
+            var configuration = BuildConfiguration(discovery.Discover(profileAssemblies), profileAssemblies);
 
             services.AddSingleton(options);
             services.AddSingleton(configuration);
@@ -60,7 +60,7 @@ namespace OctoMap
             return services;
         }
 
-        private static OctoMapConfiguration BuildConfiguration(IReadOnlyCollection<OctoMapProfile> profiles)
+        private static OctoMapConfiguration BuildConfiguration(IReadOnlyCollection<OctoMapProfile> profiles, IReadOnlyCollection<Assembly> profileAssemblies)
         {
             var builder = new OctoMapConfigurationBuilder();
             foreach (var profile in profiles)
@@ -68,7 +68,44 @@ namespace OctoMap
                 profile.Configure(builder);
             }
 
+            foreach (var assembly in profileAssemblies ?? Array.Empty<Assembly>())
+            {
+                RegisterInterfaceMaps(builder, assembly);
+            }
+
             return (OctoMapConfiguration)builder.Build();
+        }
+
+        private static void RegisterInterfaceMaps(OctoMapConfigurationBuilder builder, Assembly assembly)
+        {
+            foreach (var type in assembly.GetTypes())
+            {
+                if (type.IsAbstract || type.IsInterface)
+                {
+                    continue;
+                }
+
+                foreach (var interfaceType in type.GetInterfaces())
+                {
+                    if (!interfaceType.IsGenericType)
+                    {
+                        continue;
+                    }
+
+                    var genericDefinition = interfaceType.GetGenericTypeDefinition();
+                    var relatedType = interfaceType.GetGenericArguments()[0];
+
+                    if (genericDefinition == typeof(IMapFrom<>))
+                    {
+                        builder.CreateMap(relatedType, type);
+                    }
+
+                    if (genericDefinition == typeof(IMapTo<>))
+                    {
+                        builder.CreateMap(type, relatedType);
+                    }
+                }
+            }
         }
     }
 }

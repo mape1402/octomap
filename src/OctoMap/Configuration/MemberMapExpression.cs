@@ -26,6 +26,7 @@ namespace OctoMap.Configuration
         {
             _memberMap.IsIgnored = true;
             _memberMap.SourceExpression = null;
+            _memberMap.HasConstantValue = false;
         }
 
         /// <inheritdoc/>
@@ -33,6 +34,23 @@ namespace OctoMap.Configuration
         {
             _memberMap.IsIgnored = false;
             _memberMap.SourceExpression = sourceExpression ?? throw new ArgumentNullException(nameof(sourceExpression));
+            _memberMap.HasConstantValue = false;
+        }
+
+        /// <inheritdoc/>
+        public void UseValue(TMember value)
+        {
+            _memberMap.IsIgnored = false;
+            _memberMap.SourceExpression = null;
+            _memberMap.HasConstantValue = true;
+            _memberMap.ConstantValue = value;
+        }
+
+        /// <inheritdoc/>
+        public void NullSubstitute(TMember value)
+        {
+            _memberMap.HasNullSubstitute = true;
+            _memberMap.NullSubstitute = value;
         }
     }
 }

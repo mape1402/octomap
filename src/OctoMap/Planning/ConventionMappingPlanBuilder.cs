@@ -44,7 +44,13 @@ namespace OctoMap.Planning
 
                     if (memberMap.SourceExpression != null)
                     {
-                        assignments.Add(new MemberAssignmentPlan(destinationProperty, null, memberMap.SourceExpression));
+                        assignments.Add(CreateAssignment(destinationProperty, null, memberMap.SourceExpression, memberMap));
+                        continue;
+                    }
+
+                    if (memberMap.HasConstantValue)
+                    {
+                        assignments.Add(CreateAssignment(destinationProperty, null, null, memberMap));
                         continue;
                     }
                 }
@@ -59,7 +65,7 @@ namespace OctoMap.Planning
                     continue;
                 }
 
-                assignments.Add(new MemberAssignmentPlan(destinationProperty, sourceProperty, null));
+                assignments.Add(CreateAssignment(destinationProperty, sourceProperty, null, memberMap));
             }
 
             return new MappingPlan(typeMap.SourceType, typeMap.DestinationType, assignments);
@@ -67,6 +73,20 @@ namespace OctoMap.Planning
 
         private static bool CanWrite(PropertyInfo property)
             => property.CanWrite && property.SetMethod != null && property.SetMethod.IsPublic;
+
+        private static MemberAssignmentPlan CreateAssignment(
+            PropertyInfo destinationProperty,
+            PropertyInfo sourceProperty,
+            System.Linq.Expressions.LambdaExpression sourceExpression,
+            MemberMap memberMap)
+            => new(
+                destinationProperty,
+                sourceProperty,
+                sourceExpression,
+                memberMap?.HasConstantValue == true,
+                memberMap?.ConstantValue,
+                memberMap?.HasNullSubstitute == true,
+                memberMap?.NullSubstitute);
 
         private static void EnsureDestinationCanBeCreated(Type destinationType)
         {

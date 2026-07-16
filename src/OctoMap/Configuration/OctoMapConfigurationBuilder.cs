@@ -15,6 +15,13 @@ namespace OctoMap.Configuration
             return new MapExpression<TSource, TDestination>(map);
         }
 
+        /// <inheritdoc/>
+        public void CreateMap(Type sourceType, Type destinationType)
+        {
+            var map = new TypeMap(sourceType, destinationType, false);
+            _maps[new MapKey(map.SourceType, map.DestinationType)] = map;
+        }
+
         /// <summary>
         /// Builds immutable configuration.
         /// </summary>

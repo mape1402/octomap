@@ -29,6 +29,21 @@ var productDto = mapper.Map<ProductDto>(new Product
 
 Console.WriteLine($"Implicit map: {productDto.Sku} - {productDto.Price}");
 
+var orderDto = mapper.Map<Order, OrderDto>(new Order
+{
+    Id = 700,
+    Description = null
+});
+
+Console.WriteLine($"Value rules: {orderDto.Id} - {orderDto.Status} - {orderDto.Description}");
+
+var registeredByInterface = mapper.Map<WarehouseItemDto>(new WarehouseItem
+{
+    Code = "WH-42"
+});
+
+Console.WriteLine($"Interface map: {registeredByInterface.Code}");
+
 /// <summary>
 /// Defines sample maps for the sales domain.
 /// </summary>
@@ -40,6 +55,10 @@ public sealed class SalesProfile : OctoMapProfile
         builder.CreateMap<Customer, CustomerDto>()
             .ForMember(x => x.FullName, x => x.MapFrom(s => s.FirstName + " " + s.LastName))
             .ForMember(x => x.InternalCode, x => x.Ignore());
+
+        builder.CreateMap<Order, OrderDto>()
+            .ForMember(x => x.Status, x => x.UseValue("Created"))
+            .ForMember(x => x.Description, x => x.NullSubstitute("No description"));
     }
 }
 
@@ -120,4 +139,63 @@ public sealed class ProductDto
     /// Gets or sets the product price.
     /// </summary>
     public decimal Price { get; set; }
+}
+
+/// <summary>
+/// Represents a sample order source model.
+/// </summary>
+public sealed class Order
+{
+    /// <summary>
+    /// Gets or sets the order identifier.
+    /// </summary>
+    public int Id { get; set; }
+
+    /// <summary>
+    /// Gets or sets the order description.
+    /// </summary>
+    public string Description { get; set; }
+}
+
+/// <summary>
+/// Represents a sample order destination model.
+/// </summary>
+public sealed class OrderDto
+{
+    /// <summary>
+    /// Gets or sets the order identifier.
+    /// </summary>
+    public int Id { get; set; }
+
+    /// <summary>
+    /// Gets or sets the order status.
+    /// </summary>
+    public string Status { get; set; }
+
+    /// <summary>
+    /// Gets or sets the order description.
+    /// </summary>
+    public string Description { get; set; }
+}
+
+/// <summary>
+/// Represents a warehouse item source model.
+/// </summary>
+public sealed class WarehouseItem
+{
+    /// <summary>
+    /// Gets or sets the warehouse item code.
+    /// </summary>
+    public string Code { get; set; }
+}
+
+/// <summary>
+/// Represents a warehouse item destination model declared through IMapFrom.
+/// </summary>
+public sealed class WarehouseItemDto : IMapFrom<WarehouseItem>
+{
+    /// <summary>
+    /// Gets or sets the warehouse item code.
+    /// </summary>
+    public string Code { get; set; }
 }
