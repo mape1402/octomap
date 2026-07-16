@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <PackageReference Include="DynaBee" Version="1.1.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.5" />
     <PackageReference Include="MinVer" Version="6.0.0" PrivateAssets="All" />
   </ItemGroup>
 </Project>
