@@ -12,7 +12,7 @@ namespace OctoMap.Configuration
         {
             var map = new TypeMap(typeof(TSource), typeof(TDestination), false);
             _maps[new MapKey(map.SourceType, map.DestinationType)] = map;
-            return new MapExpression<TSource, TDestination>();
+            return new MapExpression<TSource, TDestination>(map);
         }
 
         /// <summary>

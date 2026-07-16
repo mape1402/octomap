@@ -5,6 +5,8 @@ namespace OctoMap.Configuration
     /// </summary>
     internal sealed class TypeMap : ITypeMap
     {
+        private readonly Dictionary<string, MemberMap> _memberMaps = new(StringComparer.OrdinalIgnoreCase);
+
         /// <summary>
         /// Initializes a new instance of the <see cref="TypeMap"/> class.
         /// </summary>
@@ -26,5 +28,26 @@ namespace OctoMap.Configuration
 
         /// <inheritdoc/>
         public bool IsImplicit { get; }
+
+        /// <summary>
+        /// Gets the explicitly configured member maps.
+        /// </summary>
+        public IReadOnlyDictionary<string, MemberMap> MemberMaps => _memberMaps;
+
+        /// <summary>
+        /// Gets or creates explicit configuration for a destination member.
+        /// </summary>
+        /// <param name="destinationProperty">The destination property.</param>
+        /// <returns>The member map.</returns>
+        public MemberMap GetOrAddMemberMap(System.Reflection.PropertyInfo destinationProperty)
+        {
+            if (!_memberMaps.TryGetValue(destinationProperty.Name, out var memberMap))
+            {
+                memberMap = new MemberMap(destinationProperty);
+                _memberMaps[destinationProperty.Name] = memberMap;
+            }
+
+            return memberMap;
+        }
     }
 }

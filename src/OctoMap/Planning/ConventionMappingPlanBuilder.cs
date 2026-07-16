@@ -1,4 +1,5 @@
 using System.Reflection;
+using OctoMap.Configuration;
 
 namespace OctoMap.Planning
 {
@@ -22,12 +23,30 @@ namespace OctoMap.Planning
                 .Where(x => x.CanRead && x.GetMethod != null)
                 .ToDictionary(x => x.Name, StringComparer.OrdinalIgnoreCase);
 
+            var explicitMemberMaps = typeMap is TypeMap configuredTypeMap
+                ? configuredTypeMap.MemberMaps
+                : new Dictionary<string, MemberMap>(StringComparer.OrdinalIgnoreCase);
+
             var assignments = new List<MemberAssignmentPlan>();
             foreach (var destinationProperty in typeMap.DestinationType.GetProperties(BindingFlags.Instance | BindingFlags.Public))
             {
                 if (!CanWrite(destinationProperty))
                 {
                     continue;
+                }
+
+                if (explicitMemberMaps.TryGetValue(destinationProperty.Name, out var memberMap))
+                {
+                    if (memberMap.IsIgnored)
+                    {
+                        continue;
+                    }
+
+                    if (memberMap.SourceExpression != null)
+                    {
+                        assignments.Add(new MemberAssignmentPlan(destinationProperty, null, memberMap.SourceExpression));
+                        continue;
+                    }
                 }
 
                 if (!sourceProperties.TryGetValue(destinationProperty.Name, out var sourceProperty))
@@ -40,7 +59,7 @@ namespace OctoMap.Planning
                     continue;
                 }
 
-                assignments.Add(new MemberAssignmentPlan(sourceProperty, destinationProperty));
+                assignments.Add(new MemberAssignmentPlan(destinationProperty, sourceProperty, null));
             }
 
             return new MappingPlan(typeMap.SourceType, typeMap.DestinationType, assignments);

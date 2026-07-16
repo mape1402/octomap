@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Linq.Expressions;
 
 namespace OctoMap.Planning
 {
@@ -44,18 +45,25 @@ namespace OctoMap.Planning
         /// <summary>
         /// Initializes a new instance of the <see cref="MemberAssignmentPlan"/> class.
         /// </summary>
-        /// <param name="sourceProperty">The source property.</param>
         /// <param name="destinationProperty">The destination property.</param>
-        public MemberAssignmentPlan(PropertyInfo sourceProperty, PropertyInfo destinationProperty)
+        /// <param name="sourceProperty">The source property.</param>
+        /// <param name="sourceExpression">The source expression.</param>
+        public MemberAssignmentPlan(PropertyInfo destinationProperty, PropertyInfo sourceProperty, LambdaExpression sourceExpression)
         {
-            SourceProperty = sourceProperty ?? throw new ArgumentNullException(nameof(sourceProperty));
             DestinationProperty = destinationProperty ?? throw new ArgumentNullException(nameof(destinationProperty));
+            SourceProperty = sourceProperty;
+            SourceExpression = sourceExpression;
         }
 
         /// <summary>
         /// Gets the source property.
         /// </summary>
         public PropertyInfo SourceProperty { get; }
+
+        /// <summary>
+        /// Gets the source expression.
+        /// </summary>
+        public LambdaExpression SourceExpression { get; }
 
         /// <summary>
         /// Gets the destination property.

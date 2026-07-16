@@ -13,12 +13,13 @@ var mapper = provider.GetRequiredService<IOctoMapper>();
 var customer = new Customer
 {
     Id = 100,
-    Name = "Grace Hopper",
+    FirstName = "Grace",
+    LastName = "Hopper",
     InternalCode = "not-mapped"
 };
 
 var customerDto = mapper.Map<Customer, CustomerDto>(customer);
-Console.WriteLine($"Configured map: {customerDto.Id} - {customerDto.Name}");
+Console.WriteLine($"Configured map: {customerDto.Id} - {customerDto.FullName} - internal '{customerDto.InternalCode ?? "ignored"}'");
 
 var productDto = mapper.Map<ProductDto>(new Product
 {
@@ -36,7 +37,9 @@ public sealed class SalesProfile : OctoMapProfile
     /// <inheritdoc/>
     public override void Configure(IOctoMapConfigurationBuilder builder)
     {
-        builder.CreateMap<Customer, CustomerDto>();
+        builder.CreateMap<Customer, CustomerDto>()
+            .ForMember(x => x.FullName, x => x.MapFrom(s => s.FirstName + " " + s.LastName))
+            .ForMember(x => x.InternalCode, x => x.Ignore());
     }
 }
 
@@ -51,9 +54,14 @@ public sealed class Customer
     public int Id { get; set; }
 
     /// <summary>
-    /// Gets or sets the customer name.
+    /// Gets or sets the customer first name.
     /// </summary>
-    public string Name { get; set; }
+    public string FirstName { get; set; }
+
+    /// <summary>
+    /// Gets or sets the customer last name.
+    /// </summary>
+    public string LastName { get; set; }
 
     /// <summary>
     /// Gets or sets an unmapped internal code.
@@ -72,9 +80,14 @@ public sealed class CustomerDto
     public int Id { get; set; }
 
     /// <summary>
-    /// Gets or sets the customer name.
+    /// Gets or sets the customer full name.
     /// </summary>
-    public string Name { get; set; }
+    public string FullName { get; set; }
+
+    /// <summary>
+    /// Gets or sets the internal code.
+    /// </summary>
+    public string InternalCode { get; set; }
 }
 
 /// <summary>
