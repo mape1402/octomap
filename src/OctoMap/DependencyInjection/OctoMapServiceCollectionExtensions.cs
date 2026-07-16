@@ -6,6 +6,7 @@ using OctoMap.Generation;
 using OctoMap.Generation.Dynabee;
 using OctoMap.Planning;
 using OctoMap.Runtime;
+using OctoMap.Validation;
 
 namespace OctoMap
 {
@@ -50,6 +51,7 @@ namespace OctoMap
             services.AddSingleton(configuration);
             services.AddSingleton<IOctoMapConfiguration>(configuration);
             services.AddSingleton<IOctoMapProfileDiscovery, OctoMapProfileDiscovery>();
+            services.AddSingleton<IOctoMapValidator, OctoMapValidator>();
             services.AddSingleton<IMappingPlanBuilder, ConventionMappingPlanBuilder>();
             services.AddSingleton<IMappingGenerationBackend, DynabeeMappingGenerationBackend>();
             services.AddSingleton<ICompiledMapRegistry, CompiledMapRegistry>();

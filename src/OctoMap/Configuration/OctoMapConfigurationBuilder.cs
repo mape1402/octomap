@@ -1,5 +1,7 @@
 namespace OctoMap.Configuration
 {
+    using OctoMap.Validation;
+
     /// <summary>
     /// Builds OctoMap configuration from profile declarations.
     /// </summary>
@@ -27,6 +29,6 @@ namespace OctoMap.Configuration
         /// </summary>
         /// <returns>The immutable configuration.</returns>
         public IOctoMapConfiguration Build()
-            => new OctoMapConfiguration(new Dictionary<MapKey, TypeMap>(_maps));
+            => new OctoMapConfiguration(new Dictionary<MapKey, TypeMap>(_maps), new OctoMapValidator());
     }
 }

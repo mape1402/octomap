@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using OctoMap.Configuration;
 using OctoMap.Generation;
 using OctoMap.Planning;
+using OctoMap.Validation;
 
 namespace OctoMap.Runtime
 {
@@ -15,6 +16,7 @@ namespace OctoMap.Runtime
         private readonly OctoMapOptions _options;
         private readonly IMappingPlanBuilder _planBuilder;
         private readonly IMappingGenerationBackend _generationBackend;
+        private readonly IOctoMapValidator _validator;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="CompiledMapRegistry"/> class.
@@ -23,16 +25,19 @@ namespace OctoMap.Runtime
         /// <param name="options">The runtime options.</param>
         /// <param name="planBuilder">The mapping plan builder.</param>
         /// <param name="generationBackend">The generation backend.</param>
+        /// <param name="validator">The configuration validator.</param>
         public CompiledMapRegistry(
             IOctoMapConfiguration configuration,
             OctoMapOptions options,
             IMappingPlanBuilder planBuilder,
-            IMappingGenerationBackend generationBackend)
+            IMappingGenerationBackend generationBackend,
+            IOctoMapValidator validator)
         {
             _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
             _options = options ?? throw new ArgumentNullException(nameof(options));
             _planBuilder = planBuilder ?? throw new ArgumentNullException(nameof(planBuilder));
             _generationBackend = generationBackend ?? throw new ArgumentNullException(nameof(generationBackend));
+            _validator = validator ?? throw new ArgumentNullException(nameof(validator));
         }
 
         /// <inheritdoc/>
@@ -46,6 +51,12 @@ namespace OctoMap.Runtime
         {
             var typeMap = _configuration.FindMap(sourceType, destinationType)
                 ?? CreateImplicitMap(sourceType, destinationType);
+
+            var report = _validator.Validate(new[] { typeMap });
+            if (!report.IsValid)
+            {
+                throw new OctoMapValidationException(report);
+            }
 
             var plan = _planBuilder.Build(typeMap);
             if (!_generationBackend.Supports(plan))

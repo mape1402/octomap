@@ -12,5 +12,16 @@ namespace OctoMap
         /// <param name="destinationType">The destination type.</param>
         /// <returns>The matching type map when configured; otherwise, null.</returns>
         ITypeMap FindMap(Type sourceType, Type destinationType);
+
+        /// <summary>
+        /// Validates the current configuration.
+        /// </summary>
+        /// <returns>The validation report.</returns>
+        OctoMapValidationReport Validate();
+
+        /// <summary>
+        /// Throws when the current configuration is invalid.
+        /// </summary>
+        void AssertValid();
     }
 }
