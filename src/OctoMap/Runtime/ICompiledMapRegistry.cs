@@ -14,5 +14,13 @@ namespace OctoMap.Runtime
         /// <param name="destinationType">The destination type.</param>
         /// <returns>The compiled map.</returns>
         CompiledMap GetOrAdd(Type sourceType, Type destinationType);
+
+        /// <summary>
+        /// Gets or creates a compiled map for the specified source set and destination type.
+        /// </summary>
+        /// <param name="sourceTypes">The source types.</param>
+        /// <param name="destinationType">The destination type.</param>
+        /// <returns>The compiled map.</returns>
+        CompiledMap GetOrAdd(IReadOnlyList<Type> sourceTypes, Type destinationType);
     }
 }

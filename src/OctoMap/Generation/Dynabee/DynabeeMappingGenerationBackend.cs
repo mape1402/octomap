@@ -40,21 +40,35 @@ namespace OctoMap.Generation.Dynabee
             }
 
             var className = BuildClassName(plan);
-            var mapperInterface = typeof(IOctoMapper<,>).MakeGenericType(plan.SourceType, plan.DestinationType);
             var context = _builderFactory
                 .Create($"OctoMap.Generated.{Interlocked.Increment(ref _sequence)}")
                 .DisableCache()
-                .AddClass(className, c => c
-                    .Implements(mapperInterface, false)
-                    .RegisterAsConcrete(false)
-                    .AddMethod(nameof(IOctoMapper<object, object>.Map), plan.DestinationType, m => m
-                        .WithParameter("source", plan.SourceType)
-                        .WithParameter<IMapContext>("context")
-                        .EmitsBody(body => EmitMapMethod(body, plan))))
+                .AddClass(className, c =>
+                {
+                    c.RegisterAsConcrete(false);
+                    if (plan.SourceTypes.Count == 1)
+                    {
+                        c.Implements(typeof(IOctoMapper<,>).MakeGenericType(plan.SourceType, plan.DestinationType), false);
+                    }
+
+                    c.AddMethod(nameof(IOctoMapper<object, object>.Map), plan.DestinationType, m =>
+                    {
+                        for (var index = 0; index < plan.SourceTypes.Count; index++)
+                        {
+                            m.WithParameter(GetSourceParameterName(plan, index), plan.SourceTypes[index]);
+                        }
+
+                        m.WithParameter<IMapContext>("context")
+                            .EmitsBody(body => EmitMapMethod(body, plan));
+                    });
+                })
                 .Build();
 
             var mapper = context.CreateInstance(className);
-            return new CompiledMap(mapper, mapper.GetType());
+            var sourceSetInvoker = plan.SourceTypes.Count > 1
+                ? CreateSourceSetInvoker(mapper, mapper.GetType(), plan)
+                : null;
+            return new CompiledMap(mapper, mapper.GetType(), sourceSetInvoker);
         }
 
         private static string BuildClassName(MappingPlan plan)
@@ -72,13 +86,15 @@ namespace OctoMap.Generation.Dynabee
 
         private static void EmitMapMethod(IBeeMethodBodyBuilder body, MappingPlan plan)
         {
-            var source = body.Parameter("source");
+            var sources = plan.SourceTypes
+                .Select((_, index) => body.Parameter(GetSourceParameterName(plan, index)))
+                .ToArray();
             var destination = body.DeclareLocal("destination", plan.DestinationType);
 
-            if (!plan.SourceType.IsValueType)
+            if (plan.SourceTypes.Count == 1 && !plan.SourceType.IsValueType)
             {
                 body.If(
-                    body.IsNull(source),
+                    body.IsNull(sources[0]),
                     whenTrue => whenTrue.Return(body.Default(plan.DestinationType)));
             }
 
@@ -87,7 +103,7 @@ namespace OctoMap.Generation.Dynabee
             foreach (var assignment in plan.Assignments)
             {
                 var target = body.Property(destination, assignment.DestinationProperty.Name);
-                var value = BuildAssignmentValue(body, source, assignment);
+                var value = BuildAssignmentValue(body, sources, assignment);
                 body.Assign(target, value);
             }
 
@@ -103,7 +119,7 @@ namespace OctoMap.Generation.Dynabee
 
         private static IBeeValueExpression BuildAssignmentValue(
             IBeeMethodBodyBuilder body,
-            IBeeValueExpression source,
+            IReadOnlyList<IBeeValueExpression> sources,
             MemberAssignmentPlan assignment)
         {
             IBeeValueExpression value;
@@ -113,10 +129,11 @@ namespace OctoMap.Generation.Dynabee
             }
             else if (assignment.SourceExpression != null)
             {
-                value = BuildExpression(body, source, assignment.SourceExpression.Body, assignment.SourceExpression.Parameters[0]);
+                value = BuildExpression(body, sources, assignment.SourceExpression.Body, assignment.SourceExpression.Parameters[0], assignment.SourceIndex);
             }
             else
             {
+                var source = sources[assignment.SourceIndex];
                 value = body.Property(source, assignment.SourceProperty.Name);
             }
 
@@ -132,27 +149,30 @@ namespace OctoMap.Generation.Dynabee
 
         private static IBeeValueExpression BuildExpression(
             IBeeMethodBodyBuilder body,
-            IBeeValueExpression source,
+            IReadOnlyList<IBeeValueExpression> sources,
             Expression expression,
-            ParameterExpression sourceParameter)
+            ParameterExpression sourceParameter,
+            int sourceIndex)
         {
             switch (expression)
             {
                 case ParameterExpression parameter when ReferenceEquals(parameter, sourceParameter):
-                    return source;
+                    return sources[sourceIndex];
                 case MemberExpression member:
-                    return BuildMemberExpression(body, source, member, sourceParameter);
+                    return BuildMemberExpression(body, sources, member, sourceParameter, sourceIndex);
                 case ConstantExpression constant:
                     return body.Constant(constant.Value, constant.Type);
                 case BinaryExpression binary:
-                    return BuildBinaryExpression(body, source, binary, sourceParameter);
+                    return BuildBinaryExpression(body, sources, binary, sourceParameter, sourceIndex);
                 case UnaryExpression unary when unary.NodeType == ExpressionType.Convert || unary.NodeType == ExpressionType.ConvertChecked:
-                    return body.Convert(BuildExpression(body, source, unary.Operand, sourceParameter), unary.Type);
+                    return body.Convert(BuildExpression(body, sources, unary.Operand, sourceParameter, sourceIndex), unary.Type);
                 case ConditionalExpression conditional:
                     return body.If(
-                        BuildExpression(body, source, conditional.Test, sourceParameter),
-                        BuildExpression(body, source, conditional.IfTrue, sourceParameter),
-                        BuildExpression(body, source, conditional.IfFalse, sourceParameter));
+                        BuildExpression(body, sources, conditional.Test, sourceParameter, sourceIndex),
+                        BuildExpression(body, sources, conditional.IfTrue, sourceParameter, sourceIndex),
+                        BuildExpression(body, sources, conditional.IfFalse, sourceParameter, sourceIndex));
+                case MethodCallExpression call:
+                    return BuildMethodCallExpression(sources, call, sourceParameter);
                 default:
                     throw new NotSupportedException($"Expression node '{expression.NodeType}' is not supported by OctoMap Phase 2.");
             }
@@ -160,9 +180,10 @@ namespace OctoMap.Generation.Dynabee
 
         private static IBeeValueExpression BuildMemberExpression(
             IBeeMethodBodyBuilder body,
-            IBeeValueExpression source,
+            IReadOnlyList<IBeeValueExpression> sources,
             MemberExpression expression,
-            ParameterExpression sourceParameter)
+            ParameterExpression sourceParameter,
+            int sourceIndex)
         {
             if (expression.Member is PropertyInfo property)
             {
@@ -171,7 +192,7 @@ namespace OctoMap.Generation.Dynabee
                     return body.StaticProperty(property.DeclaringType, property.Name);
                 }
 
-                return body.Property(BuildExpression(body, source, expression.Expression, sourceParameter), property.Name);
+                return body.Property(BuildExpression(body, sources, expression.Expression, sourceParameter, sourceIndex), property.Name);
             }
 
             if (expression.Member is FieldInfo field)
@@ -181,7 +202,7 @@ namespace OctoMap.Generation.Dynabee
                     return body.StaticField(field.DeclaringType, field.Name);
                 }
 
-                return body.Field(BuildExpression(body, source, expression.Expression, sourceParameter), field.Name);
+                return body.Field(BuildExpression(body, sources, expression.Expression, sourceParameter, sourceIndex), field.Name);
             }
 
             throw new NotSupportedException($"Member '{expression.Member.Name}' is not supported by OctoMap Phase 2.");
@@ -189,27 +210,50 @@ namespace OctoMap.Generation.Dynabee
 
         private static IBeeValueExpression BuildBinaryExpression(
             IBeeMethodBodyBuilder body,
-            IBeeValueExpression source,
+            IReadOnlyList<IBeeValueExpression> sources,
             BinaryExpression expression,
-            ParameterExpression sourceParameter)
+            ParameterExpression sourceParameter,
+            int sourceIndex)
         {
             switch (expression.NodeType)
             {
                 case ExpressionType.Add:
                     return body.Add(
-                        BuildExpression(body, source, expression.Left, sourceParameter),
-                        BuildExpression(body, source, expression.Right, sourceParameter));
+                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex),
+                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex));
                 case ExpressionType.Equal:
                     return body.Equal(
-                        BuildExpression(body, source, expression.Left, sourceParameter),
-                        BuildExpression(body, source, expression.Right, sourceParameter));
+                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex),
+                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex));
                 case ExpressionType.NotEqual:
                     return body.NotEqual(
-                        BuildExpression(body, source, expression.Left, sourceParameter),
-                        BuildExpression(body, source, expression.Right, sourceParameter));
+                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex),
+                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex));
                 default:
                     throw new NotSupportedException($"Binary expression '{expression.NodeType}' is not supported by OctoMap Phase 2.");
             }
+        }
+
+        private static IBeeValueExpression BuildMethodCallExpression(
+            IReadOnlyList<IBeeValueExpression> sources,
+            MethodCallExpression expression,
+            ParameterExpression sourceParameter)
+        {
+            if (ReferenceEquals(expression.Object, sourceParameter)
+                && expression.Method.IsGenericMethod
+                && expression.Method.GetGenericMethodDefinition() == typeof(IMultiSourceMapContext).GetMethod(nameof(IMultiSourceMapContext.Get)))
+            {
+                var requestedType = expression.Method.GetGenericArguments()[0];
+                for (var index = 0; index < sources.Count; index++)
+                {
+                    if (requestedType.IsAssignableFrom(sources[index].Type))
+                    {
+                        return sources[index];
+                    }
+                }
+            }
+
+            throw new NotSupportedException($"Method call '{expression.Method.Name}' is not supported by OctoMap Phase 3.");
         }
 
         private static IBeeValueExpression ApplyNullSubstitute(
@@ -226,6 +270,27 @@ namespace OctoMap.Generation.Dynabee
                 body.IsNull(value),
                 body.Constant(assignment.NullSubstitute, assignment.DestinationProperty.PropertyType),
                 value);
+        }
+
+        private static string GetSourceParameterName(MappingPlan plan, int index)
+            => plan.SourceTypes.Count == 1 ? "source" : $"source{index}";
+
+        private static Func<SourceSet, IMapContext, object> CreateSourceSetInvoker(object mapper, Type mapperType, MappingPlan plan)
+        {
+            var mapperInstance = Expression.Constant(mapper, mapperType);
+            var sourceSet = Expression.Parameter(typeof(SourceSet), "sources");
+            var context = Expression.Parameter(typeof(IMapContext), "context");
+            var getSourceMethod = typeof(SourceSet).GetMethod(nameof(SourceSet.Get));
+            var arguments = plan.SourceTypes
+                .Select(sourceType => Expression.Call(sourceSet, getSourceMethod.MakeGenericMethod(sourceType)))
+                .Concat(new Expression[] { context })
+                .ToArray();
+            var method = mapperType.GetMethod(nameof(IOctoMapper<object, object>.Map), plan.SourceTypes.Concat(new[] { typeof(IMapContext) }).ToArray());
+            var call = Expression.Call(mapperInstance, method, arguments);
+            return Expression.Lambda<Func<SourceSet, IMapContext, object>>(
+                Expression.Convert(call, typeof(object)),
+                sourceSet,
+                context).Compile();
         }
     }
 }

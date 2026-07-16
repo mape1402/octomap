@@ -14,6 +14,14 @@ namespace OctoMap
         ITypeMap FindMap(Type sourceType, Type destinationType);
 
         /// <summary>
+        /// Finds a configured multi-source type map.
+        /// </summary>
+        /// <param name="sourceTypes">The source types.</param>
+        /// <param name="destinationType">The destination type.</param>
+        /// <returns>The matching type map when configured; otherwise, null.</returns>
+        ITypeMap FindMap(IReadOnlyList<Type> sourceTypes, Type destinationType);
+
+        /// <summary>
         /// Validates the current configuration.
         /// </summary>
         /// <returns>The validation report.</returns>

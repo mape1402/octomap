@@ -47,6 +47,13 @@ namespace OctoMap.Runtime
             return _compiledMaps.GetOrAdd(key, _ => Compile(sourceType, destinationType));
         }
 
+        /// <inheritdoc/>
+        public CompiledMap GetOrAdd(IReadOnlyList<Type> sourceTypes, Type destinationType)
+        {
+            var key = new MapKey(sourceTypes, destinationType);
+            return _compiledMaps.GetOrAdd(key, _ => Compile(sourceTypes, destinationType));
+        }
+
         private CompiledMap Compile(Type sourceType, Type destinationType)
         {
             var typeMap = _configuration.FindMap(sourceType, destinationType)
@@ -62,6 +69,29 @@ namespace OctoMap.Runtime
             if (!_generationBackend.Supports(plan))
             {
                 throw new InvalidOperationException($"Generation backend '{_generationBackend.Name}' does not support map '{sourceType.FullName}->{destinationType.FullName}'.");
+            }
+
+            return _generationBackend.Compile(plan);
+        }
+
+        private CompiledMap Compile(IReadOnlyList<Type> sourceTypes, Type destinationType)
+        {
+            var typeMap = _configuration.FindMap(sourceTypes, destinationType);
+            if (typeMap == null)
+            {
+                throw new InvalidOperationException($"Multi-source map '{string.Join(", ", sourceTypes.Select(x => x.FullName))}->{destinationType.FullName}' is not configured. Multi-source maps must be registered explicitly.");
+            }
+
+            var report = _validator.Validate(new[] { typeMap });
+            if (!report.IsValid)
+            {
+                throw new OctoMapValidationException(report);
+            }
+
+            var plan = _planBuilder.Build(typeMap);
+            if (!_generationBackend.Supports(plan))
+            {
+                throw new InvalidOperationException($"Generation backend '{_generationBackend.Name}' does not support map '{string.Join(", ", sourceTypes.Select(x => x.FullName))}->{destinationType.FullName}'.");
             }
 
             return _generationBackend.Compile(plan);

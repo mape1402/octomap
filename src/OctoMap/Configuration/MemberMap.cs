@@ -51,5 +51,10 @@ namespace OctoMap.Configuration
         /// Gets or sets the null substitute value.
         /// </summary>
         public object NullSubstitute { get; set; }
+
+        /// <summary>
+        /// Gets or sets the configured source index for multi-source maps.
+        /// </summary>
+        public int SourceIndex { get; set; }
     }
 }

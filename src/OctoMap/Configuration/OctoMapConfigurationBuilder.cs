@@ -8,6 +8,7 @@ namespace OctoMap.Configuration
     internal sealed class OctoMapConfigurationBuilder : IOctoMapConfigurationBuilder
     {
         private readonly Dictionary<MapKey, TypeMap> _maps = new();
+        private readonly List<MultiSourceTypeMap> _multiMaps = new();
 
         /// <inheritdoc/>
         public IMapExpression<TSource, TDestination> CreateMap<TSource, TDestination>()
@@ -24,11 +25,30 @@ namespace OctoMap.Configuration
             _maps[new MapKey(map.SourceType, map.DestinationType)] = map;
         }
 
+        /// <inheritdoc/>
+        public IMultiMapExpression<TDestination> CreateMultiMap<TDestination>()
+        {
+            var map = new MultiSourceTypeMap(typeof(TDestination));
+            _multiMaps.Add(map);
+            return new MultiMapExpression<TDestination>(map);
+        }
+
         /// <summary>
         /// Builds immutable configuration.
         /// </summary>
         /// <returns>The immutable configuration.</returns>
         public IOctoMapConfiguration Build()
-            => new OctoMapConfiguration(new Dictionary<MapKey, TypeMap>(_maps), new OctoMapValidator());
+        {
+            var multiMaps = new Dictionary<MapKey, MultiSourceTypeMap>();
+            foreach (var multiMap in _multiMaps)
+            {
+                multiMaps[new MapKey(multiMap.SourceTypes, multiMap.DestinationType)] = multiMap;
+            }
+
+            return new OctoMapConfiguration(
+                new Dictionary<MapKey, TypeMap>(_maps),
+                multiMaps,
+                new OctoMapValidator());
+        }
     }
 }

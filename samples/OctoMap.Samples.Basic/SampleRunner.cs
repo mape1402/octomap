@@ -56,6 +56,21 @@ namespace OctoMap.Samples.Basic
             });
 
             Console.WriteLine($"Interface map: {registeredByInterface.Code}");
+
+            var summary = _mapper.Map<OrderSummaryDto>(SourceSet.Of(
+                new Order
+                {
+                    Id = 701,
+                    Description = "Priority order"
+                },
+                new Customer
+                {
+                    Id = 101,
+                    FirstName = "Ada",
+                    LastName = "Lovelace"
+                }));
+
+            Console.WriteLine($"Multi-source map: {summary.OrderId} - {summary.CustomerName} - {summary.Label}");
         }
     }
 }

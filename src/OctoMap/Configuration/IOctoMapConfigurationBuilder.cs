@@ -14,6 +14,13 @@ namespace OctoMap
         IMapExpression<TSource, TDestination> CreateMap<TSource, TDestination>();
 
         /// <summary>
+        /// Creates an explicitly configured multi-source map to the destination type.
+        /// </summary>
+        /// <typeparam name="TDestination">The destination type.</typeparam>
+        /// <returns>The multi-source map expression for further configuration.</returns>
+        IMultiMapExpression<TDestination> CreateMultiMap<TDestination>();
+
+        /// <summary>
         /// Creates a map between the source and destination types.
         /// </summary>
         /// <param name="sourceType">The source type.</param>

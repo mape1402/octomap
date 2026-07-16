@@ -32,6 +32,11 @@ namespace OctoMap.Validation
 
             if (map is not TypeMap typeMap)
             {
+                if (map is MultiSourceTypeMap multiSourceTypeMap)
+                {
+                    ValidateMultiSourceMap(multiSourceTypeMap, issues);
+                }
+
                 return;
             }
 
@@ -122,7 +127,7 @@ namespace OctoMap.Validation
                 case BinaryExpression binary:
                     ValidateExpression(map, memberMap, binary.Left, sourceParameter, issues);
                     ValidateExpression(map, memberMap, binary.Right, sourceParameter, issues);
-                    if (binary.NodeType != ExpressionType.Add)
+                    if (binary.NodeType != ExpressionType.Add && binary.NodeType != ExpressionType.Equal && binary.NodeType != ExpressionType.NotEqual)
                     {
                         issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"Binary expression '{binary.NodeType}' is not supported in MapFrom expressions."));
                     }
@@ -131,9 +136,135 @@ namespace OctoMap.Validation
                 case UnaryExpression unary when unary.NodeType == ExpressionType.Convert || unary.NodeType == ExpressionType.ConvertChecked:
                     ValidateExpression(map, memberMap, unary.Operand, sourceParameter, issues);
                     return;
+                case ConditionalExpression conditional:
+                    ValidateExpression(map, memberMap, conditional.Test, sourceParameter, issues);
+                    ValidateExpression(map, memberMap, conditional.IfTrue, sourceParameter, issues);
+                    ValidateExpression(map, memberMap, conditional.IfFalse, sourceParameter, issues);
+                    return;
                 default:
                     issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"Expression node '{expression.NodeType}' is not supported in MapFrom expressions."));
                     return;
+            }
+        }
+
+        private static void ValidateMultiSourceMap(MultiSourceTypeMap map, List<OctoMapValidationIssue> issues)
+        {
+            if (map.SourceMaps.Count == 0)
+            {
+                issues.Add(CreateIssue(map, null, $"Multi-source map for destination type '{map.DestinationType.FullName}' must declare at least one source."));
+                return;
+            }
+
+            foreach (var sourceMap in map.SourceMaps)
+            {
+                foreach (var memberMap in sourceMap.MemberMaps.Values)
+                {
+                    if (memberMap.IsIgnored)
+                    {
+                        continue;
+                    }
+
+                    if (memberMap.SourceExpression == null && !memberMap.HasConstantValue)
+                    {
+                        issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"Multi-source member '{memberMap.DestinationProperty.Name}' must be mapped explicitly with MapFrom or UseValue."));
+                        continue;
+                    }
+
+                    ValidateMemberMap(map, memberMap, issues);
+                }
+            }
+
+            foreach (var memberMap in map.ContextMemberMaps.Values)
+            {
+                if (memberMap.SourceExpression == null)
+                {
+                    issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"Multi-source context member '{memberMap.DestinationProperty.Name}' must be mapped explicitly with MapFrom."));
+                    continue;
+                }
+
+                if (!CanWrite(memberMap.DestinationProperty))
+                {
+                    issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"Destination member '{memberMap.DestinationProperty.Name}' must have a public setter."));
+                }
+
+                ValidateMultiSourceExpression(map, memberMap, memberMap.SourceExpression.Body, memberMap.SourceExpression.Parameters[0], issues);
+                if (!memberMap.DestinationProperty.PropertyType.IsAssignableFrom(memberMap.SourceExpression.Body.Type))
+                {
+                    issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"MapFrom expression result type '{memberMap.SourceExpression.Body.Type.FullName}' cannot be assigned to destination member '{memberMap.DestinationProperty.Name}' of type '{memberMap.DestinationProperty.PropertyType.FullName}'."));
+                }
+            }
+        }
+
+        private static void ValidateMultiSourceExpression(
+            MultiSourceTypeMap map,
+            MultiSourceMemberMap memberMap,
+            Expression expression,
+            ParameterExpression sourceParameter,
+            List<OctoMapValidationIssue> issues)
+        {
+            switch (expression)
+            {
+                case MethodCallExpression call:
+                    ValidateMultiSourceMethodCall(map, memberMap, call, sourceParameter, issues);
+                    return;
+                case MemberExpression member:
+                    if (member.Expression != null)
+                    {
+                        ValidateMultiSourceExpression(map, memberMap, member.Expression, sourceParameter, issues);
+                    }
+
+                    if (member.Member is PropertyInfo or FieldInfo)
+                    {
+                        return;
+                    }
+
+                    issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"Member '{member.Member.Name}' is not supported in multi-source MapFrom expressions."));
+                    return;
+                case ConstantExpression constant:
+                    ValidateValue(map, memberMap.DestinationProperty.Name, constant.Value, constant.Type, "constant expression", issues);
+                    return;
+                case BinaryExpression binary:
+                    ValidateMultiSourceExpression(map, memberMap, binary.Left, sourceParameter, issues);
+                    ValidateMultiSourceExpression(map, memberMap, binary.Right, sourceParameter, issues);
+                    if (binary.NodeType != ExpressionType.Add && binary.NodeType != ExpressionType.Equal && binary.NodeType != ExpressionType.NotEqual)
+                    {
+                        issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"Binary expression '{binary.NodeType}' is not supported in multi-source MapFrom expressions."));
+                    }
+
+                    return;
+                case UnaryExpression unary when unary.NodeType == ExpressionType.Convert || unary.NodeType == ExpressionType.ConvertChecked:
+                    ValidateMultiSourceExpression(map, memberMap, unary.Operand, sourceParameter, issues);
+                    return;
+                case ConditionalExpression conditional:
+                    ValidateMultiSourceExpression(map, memberMap, conditional.Test, sourceParameter, issues);
+                    ValidateMultiSourceExpression(map, memberMap, conditional.IfTrue, sourceParameter, issues);
+                    ValidateMultiSourceExpression(map, memberMap, conditional.IfFalse, sourceParameter, issues);
+                    return;
+                default:
+                    issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"Expression node '{expression.NodeType}' is not supported in multi-source MapFrom expressions."));
+                    return;
+            }
+        }
+
+        private static void ValidateMultiSourceMethodCall(
+            MultiSourceTypeMap map,
+            MultiSourceMemberMap memberMap,
+            MethodCallExpression expression,
+            ParameterExpression sourceParameter,
+            List<OctoMapValidationIssue> issues)
+        {
+            if (!ReferenceEquals(expression.Object, sourceParameter)
+                || !expression.Method.IsGenericMethod
+                || expression.Method.GetGenericMethodDefinition() != typeof(IMultiSourceMapContext).GetMethod(nameof(IMultiSourceMapContext.Get)))
+            {
+                issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"Method call '{expression.Method.Name}' is not supported in multi-source MapFrom expressions."));
+                return;
+            }
+
+            var requestedType = expression.Method.GetGenericArguments()[0];
+            if (!map.SourceTypes.Any(requestedType.IsAssignableFrom))
+            {
+                issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"Multi-source map does not declare source type '{requestedType.FullName}'."));
             }
         }
 

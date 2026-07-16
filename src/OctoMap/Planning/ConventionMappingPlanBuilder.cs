@@ -16,6 +16,11 @@ namespace OctoMap.Planning
                 throw new ArgumentNullException(nameof(typeMap));
             }
 
+            if (typeMap is MultiSourceTypeMap multiSourceTypeMap)
+            {
+                return BuildMultiSource(multiSourceTypeMap);
+            }
+
             EnsureDestinationCanBeCreated(typeMap.DestinationType);
 
             var sourceProperties = typeMap.SourceType
@@ -87,6 +92,68 @@ namespace OctoMap.Planning
                 memberMap?.ConstantValue,
                 memberMap?.HasNullSubstitute == true,
                 memberMap?.NullSubstitute);
+
+        private static MappingPlan BuildMultiSource(MultiSourceTypeMap typeMap)
+        {
+            EnsureDestinationCanBeCreated(typeMap.DestinationType);
+
+            if (typeMap.SourceMaps.Count == 0)
+            {
+                throw new InvalidOperationException($"Multi-source map for destination type '{typeMap.DestinationType.FullName}' must declare at least one source.");
+            }
+
+            var assignments = new List<MemberAssignmentPlan>();
+            for (var sourceIndex = 0; sourceIndex < typeMap.SourceMaps.Count; sourceIndex++)
+            {
+                var sourceMap = typeMap.SourceMaps[sourceIndex];
+                foreach (var memberMap in sourceMap.MemberMaps.Values)
+                {
+                    if (memberMap.IsIgnored)
+                    {
+                        continue;
+                    }
+
+                    memberMap.SourceIndex = sourceIndex;
+                    assignments.Add(CreateAssignment(
+                        memberMap.DestinationProperty,
+                        null,
+                        memberMap.SourceExpression,
+                        memberMap,
+                        sourceIndex));
+                }
+            }
+
+            foreach (var memberMap in typeMap.ContextMemberMaps.Values)
+            {
+                assignments.Add(new MemberAssignmentPlan(
+                    memberMap.DestinationProperty,
+                    null,
+                    memberMap.SourceExpression,
+                    false,
+                    null,
+                    false,
+                    null,
+                    -1));
+            }
+
+            return new MappingPlan(typeMap.SourceTypes, typeMap.DestinationType, assignments);
+        }
+
+        private static MemberAssignmentPlan CreateAssignment(
+            PropertyInfo destinationProperty,
+            PropertyInfo sourceProperty,
+            System.Linq.Expressions.LambdaExpression sourceExpression,
+            MemberMap memberMap,
+            int sourceIndex)
+            => new(
+                destinationProperty,
+                sourceProperty,
+                sourceExpression,
+                memberMap?.HasConstantValue == true,
+                memberMap?.ConstantValue,
+                memberMap?.HasNullSubstitute == true,
+                memberMap?.NullSubstitute,
+                sourceIndex);
 
         private static void EnsureDestinationCanBeCreated(Type destinationType)
         {

@@ -42,5 +42,22 @@ namespace OctoMap
             var mapper = (IOctoMapper<TSource, TDestination>)compiledMap.Mapper;
             return mapper.Map(source, _contextFactory.Create());
         }
+
+        /// <inheritdoc/>
+        public TDestination Map<TDestination>(SourceSet sources)
+        {
+            if (sources == null)
+            {
+                throw new ArgumentNullException(nameof(sources));
+            }
+
+            var compiledMap = _compiledMapRegistry.GetOrAdd(sources.SourceTypes, typeof(TDestination));
+            if (compiledMap.SourceSetInvoker == null)
+            {
+                throw new InvalidOperationException($"Compiled map '{compiledMap.MapperType.FullName}' does not support source set invocation.");
+            }
+
+            return (TDestination)compiledMap.SourceSetInvoker(sources, _contextFactory.Create());
+        }
     }
 }
