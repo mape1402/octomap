@@ -30,9 +30,7 @@ namespace OctoMap
             }
 
             var compiledMap = _compiledMapRegistry.GetOrAdd(source.GetType(), typeof(TDestination));
-            var mapperInterface = typeof(IOctoMapper<,>).MakeGenericType(source.GetType(), typeof(TDestination));
-            var method = mapperInterface.GetMethod(nameof(IOctoMapper<object, object>.Map));
-            return (TDestination)method.Invoke(compiledMap.Mapper, new[] { source, _contextFactory.Create() });
+            return (TDestination)compiledMap.Invoker.Invoke(new object[] { source, _contextFactory.Create() });
         }
 
         /// <inheritdoc/>
@@ -52,12 +50,12 @@ namespace OctoMap
             }
 
             var compiledMap = _compiledMapRegistry.GetOrAdd(sources.SourceTypes, typeof(TDestination));
-            if (compiledMap.SourceSetInvoker == null)
+            if (compiledMap.Invoker == null)
             {
                 throw new InvalidOperationException($"Compiled map '{compiledMap.MapperType.FullName}' does not support source set invocation.");
             }
 
-            return (TDestination)compiledMap.SourceSetInvoker(sources, _contextFactory.Create());
+            return (TDestination)compiledMap.Invoker.Invoke(sources.Sources.Concat(new object[] { _contextFactory.Create() }).ToArray());
         }
     }
 }

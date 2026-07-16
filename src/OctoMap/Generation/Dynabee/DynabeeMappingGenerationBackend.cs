@@ -3,6 +3,7 @@ using System.Reflection;
 using DynaBee.FluentApi;
 using DynaBee.FluentApi.Body;
 using DynaBee.FluentApi.DependencyInjection;
+using DynaBee.FluentApi.Invocation;
 using OctoMap.Planning;
 
 namespace OctoMap.Generation.Dynabee
@@ -65,10 +66,12 @@ namespace OctoMap.Generation.Dynabee
                 .Build();
 
             var mapper = context.CreateInstance(className);
-            var sourceSetInvoker = plan.SourceTypes.Count > 1
-                ? CreateSourceSetInvoker(mapper, mapper.GetType(), plan)
-                : null;
-            return new CompiledMap(mapper, mapper.GetType(), sourceSetInvoker);
+            var invoker = context.CreateBoundMethodInvoker(
+                className,
+                mapper,
+                nameof(IOctoMapper<object, object>.Map),
+                plan.SourceTypes.Concat(new[] { typeof(IMapContext) }).ToArray());
+            return new CompiledMap(mapper, mapper.GetType(), invoker);
         }
 
         private static string BuildClassName(MappingPlan plan)
@@ -275,22 +278,5 @@ namespace OctoMap.Generation.Dynabee
         private static string GetSourceParameterName(MappingPlan plan, int index)
             => plan.SourceTypes.Count == 1 ? "source" : $"source{index}";
 
-        private static Func<SourceSet, IMapContext, object> CreateSourceSetInvoker(object mapper, Type mapperType, MappingPlan plan)
-        {
-            var mapperInstance = Expression.Constant(mapper, mapperType);
-            var sourceSet = Expression.Parameter(typeof(SourceSet), "sources");
-            var context = Expression.Parameter(typeof(IMapContext), "context");
-            var getSourceMethod = typeof(SourceSet).GetMethod(nameof(SourceSet.Get));
-            var arguments = plan.SourceTypes
-                .Select(sourceType => Expression.Call(sourceSet, getSourceMethod.MakeGenericMethod(sourceType)))
-                .Concat(new Expression[] { context })
-                .ToArray();
-            var method = mapperType.GetMethod(nameof(IOctoMapper<object, object>.Map), plan.SourceTypes.Concat(new[] { typeof(IMapContext) }).ToArray());
-            var call = Expression.Call(mapperInstance, method, arguments);
-            return Expression.Lambda<Func<SourceSet, IMapContext, object>>(
-                Expression.Convert(call, typeof(object)),
-                sourceSet,
-                context).Compile();
-        }
     }
 }

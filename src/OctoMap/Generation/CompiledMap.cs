@@ -1,5 +1,7 @@
 namespace OctoMap.Generation
 {
+    using DynaBee.FluentApi.Invocation;
+
     /// <summary>
     /// Represents a compiled mapper produced by a generation backend.
     /// </summary>
@@ -20,12 +22,12 @@ namespace OctoMap.Generation
         /// </summary>
         /// <param name="mapper">The generated mapper instance.</param>
         /// <param name="mapperType">The generated mapper type.</param>
-        /// <param name="sourceSetInvoker">The source set invoker.</param>
-        public CompiledMap(object mapper, Type mapperType, Func<SourceSet, IMapContext, object> sourceSetInvoker)
+        /// <param name="invoker">The generated method invoker.</param>
+        public CompiledMap(object mapper, Type mapperType, IDynaBeeBoundMethodInvoker invoker)
         {
             Mapper = mapper ?? throw new ArgumentNullException(nameof(mapper));
             MapperType = mapperType ?? throw new ArgumentNullException(nameof(mapperType));
-            SourceSetInvoker = sourceSetInvoker;
+            Invoker = invoker;
         }
 
         /// <summary>
@@ -39,8 +41,8 @@ namespace OctoMap.Generation
         public Type MapperType { get; }
 
         /// <summary>
-        /// Gets the source set invoker when this map accepts multiple sources.
+        /// Gets the generated method invoker.
         /// </summary>
-        public Func<SourceSet, IMapContext, object> SourceSetInvoker { get; }
+        public IDynaBeeBoundMethodInvoker Invoker { get; }
     }
 }
