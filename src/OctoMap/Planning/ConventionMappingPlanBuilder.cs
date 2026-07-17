@@ -47,6 +47,12 @@ namespace OctoMap.Planning
                         continue;
                     }
 
+                    if (memberMap.ResolverType != null)
+                    {
+                        assignments.Add(CreateAssignment(destinationProperty, null, null, memberMap));
+                        continue;
+                    }
+
                     if (memberMap.SourceExpression != null)
                     {
                         assignments.Add(CreateAssignment(destinationProperty, null, memberMap.SourceExpression, memberMap));
@@ -88,10 +94,12 @@ namespace OctoMap.Planning
                 destinationProperty,
                 sourceProperty,
                 sourceExpression,
+                memberMap?.ResolverType,
                 memberMap?.HasConstantValue == true,
                 memberMap?.ConstantValue,
                 memberMap?.HasNullSubstitute == true,
-                memberMap?.NullSubstitute);
+                memberMap?.NullSubstitute,
+                0);
 
         private static MappingPlan BuildMultiSource(MultiSourceTypeMap typeMap)
         {
@@ -129,6 +137,7 @@ namespace OctoMap.Planning
                     memberMap.DestinationProperty,
                     null,
                     memberMap.SourceExpression,
+                    null,
                     false,
                     null,
                     false,
@@ -149,6 +158,7 @@ namespace OctoMap.Planning
                 destinationProperty,
                 sourceProperty,
                 sourceExpression,
+                resolverType: memberMap?.ResolverType,
                 memberMap?.HasConstantValue == true,
                 memberMap?.ConstantValue,
                 memberMap?.HasNullSubstitute == true,

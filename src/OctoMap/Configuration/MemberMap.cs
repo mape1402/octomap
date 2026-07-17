@@ -33,6 +33,11 @@ namespace OctoMap.Configuration
         public LambdaExpression SourceExpression { get; set; }
 
         /// <summary>
+        /// Gets or sets the resolver type.
+        /// </summary>
+        public Type ResolverType { get; set; }
+
+        /// <summary>
         /// Gets or sets whether this member uses a constant value.
         /// </summary>
         public bool HasConstantValue { get; set; }

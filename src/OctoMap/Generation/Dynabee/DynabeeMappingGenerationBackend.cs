@@ -4,6 +4,7 @@ using DynaBee.FluentApi;
 using DynaBee.FluentApi.Body;
 using DynaBee.FluentApi.DependencyInjection;
 using DynaBee.FluentApi.Invocation;
+using Microsoft.Extensions.DependencyInjection;
 using OctoMap.Planning;
 
 namespace OctoMap.Generation.Dynabee
@@ -92,6 +93,7 @@ namespace OctoMap.Generation.Dynabee
             var sources = plan.SourceTypes
                 .Select((_, index) => body.Parameter(GetSourceParameterName(plan, index)))
                 .ToArray();
+            var context = body.Parameter("context");
             var destination = body.DeclareLocal("destination", plan.DestinationType);
 
             if (plan.SourceTypes.Count == 1 && !plan.SourceType.IsValueType)
@@ -106,7 +108,7 @@ namespace OctoMap.Generation.Dynabee
             foreach (var assignment in plan.Assignments)
             {
                 var target = body.Property(destination, assignment.DestinationProperty.Name);
-                var value = BuildAssignmentValue(body, sources, assignment);
+                var value = BuildAssignmentValue(body, sources, destination, context, assignment);
                 body.Assign(target, value);
             }
 
@@ -123,10 +125,16 @@ namespace OctoMap.Generation.Dynabee
         private static IBeeValueExpression BuildAssignmentValue(
             IBeeMethodBodyBuilder body,
             IReadOnlyList<IBeeValueExpression> sources,
+            IBeeValueExpression destination,
+            IBeeValueExpression context,
             MemberAssignmentPlan assignment)
         {
             IBeeValueExpression value;
-            if (assignment.HasConstantValue)
+            if (assignment.ResolverType != null)
+            {
+                value = BuildResolverValue(body, sources, destination, context, assignment);
+            }
+            else if (assignment.HasConstantValue)
             {
                 value = body.Constant(assignment.ConstantValue, assignment.DestinationProperty.PropertyType);
             }
@@ -148,6 +156,30 @@ namespace OctoMap.Generation.Dynabee
             return value.Type == assignment.DestinationProperty.PropertyType
                 ? value
                 : body.Convert(value, assignment.DestinationProperty.PropertyType);
+        }
+
+        private static IBeeValueExpression BuildResolverValue(
+            IBeeMethodBodyBuilder body,
+            IReadOnlyList<IBeeValueExpression> sources,
+            IBeeValueExpression destination,
+            IBeeValueExpression context,
+            MemberAssignmentPlan assignment)
+        {
+            if (assignment.SourceIndex < 0)
+            {
+                throw new NotSupportedException("Context-level multi-source resolvers are not supported yet.");
+            }
+
+            var source = sources[assignment.SourceIndex];
+            var services = body.Property(context, nameof(IMapContext.Services));
+            var resolver = body.StaticCall(GetRequiredServiceMethod(assignment.ResolverType), services);
+            var resolverContract = typeof(IValueResolver<,,>).MakeGenericType(
+                source.Type,
+                destination.Type,
+                assignment.DestinationProperty.PropertyType);
+            var resolveMethod = resolverContract.GetMethod(nameof(IValueResolver<object, object, object>.Resolve));
+
+            return body.Call(resolver, resolveMethod, source, destination, context);
         }
 
         private static IBeeValueExpression BuildExpression(
@@ -277,6 +309,15 @@ namespace OctoMap.Generation.Dynabee
 
         private static string GetSourceParameterName(MappingPlan plan, int index)
             => plan.SourceTypes.Count == 1 ? "source" : $"source{index}";
+
+        private static MethodInfo GetRequiredServiceMethod(Type serviceType)
+            => typeof(ServiceProviderServiceExtensions)
+                .GetMethods(BindingFlags.Public | BindingFlags.Static)
+                .Single(x => x.Name == nameof(ServiceProviderServiceExtensions.GetRequiredService)
+                    && x.IsGenericMethodDefinition
+                    && x.GetParameters().Length == 1
+                    && x.GetParameters()[0].ParameterType == typeof(IServiceProvider))
+                .MakeGenericMethod(serviceType);
 
     }
 }

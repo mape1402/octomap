@@ -58,8 +58,8 @@ namespace OctoMap
             services.TryAddSingleton<IDynaBeeAssemblyBuilderFactory, DynaBeeAssemblyBuilderFactory>();
             services.AddSingleton<IMappingGenerationBackend, DynabeeMappingGenerationBackend>();
             services.AddSingleton<ICompiledMapRegistry, CompiledMapRegistry>();
-            services.AddSingleton<IMapContextFactory, MapContextFactory>();
-            services.AddSingleton<IOctoMapper, OctoMapper>();
+            services.AddScoped<IMapContextFactory, MapContextFactory>();
+            services.AddScoped<IOctoMapper, OctoMapper>();
             services.AddTransient(typeof(IOctoMapper<,>), typeof(OctoMapper<,>));
 
             return services;

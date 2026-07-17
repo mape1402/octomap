@@ -55,8 +55,25 @@ builder.CreateMap<Customer, CustomerDto>()
 ```csharp
 void Ignore();
 void MapFrom(Expression<Func<TSource, TMember>> sourceExpression);
+void ResolveUsing<TResolver>()
+    where TResolver : IValueResolver<TSource, TDestination, TMember>;
 void UseValue(TMember value);
 void NullSubstitute(TMember value);
+```
+
+`ResolveUsing<TResolver>()` resolves `TResolver` from `IMapContext.Services` on each map call and invokes:
+
+```csharp
+TMember Resolve(TSource source, TDestination destination, IMapContext context);
+```
+
+Resolver contract:
+
+```csharp
+public interface IValueResolver<TSource, TDestination, TMember>
+{
+    TMember Resolve(TSource source, TDestination destination, IMapContext context);
+}
 ```
 
 ## Runtime Implicit Maps

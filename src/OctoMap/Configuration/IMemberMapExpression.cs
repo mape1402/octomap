@@ -22,6 +22,13 @@ namespace OctoMap
         void MapFrom(Expression<Func<TSource, TMember>> sourceExpression);
 
         /// <summary>
+        /// Resolves this destination member through a service resolved from the mapping context service provider.
+        /// </summary>
+        /// <typeparam name="TResolver">The resolver type.</typeparam>
+        void ResolveUsing<TResolver>()
+            where TResolver : IValueResolver<TSource, TDestination, TMember>;
+
+        /// <summary>
         /// Maps this destination member from a constant value.
         /// </summary>
         /// <param name="value">The constant value.</param>

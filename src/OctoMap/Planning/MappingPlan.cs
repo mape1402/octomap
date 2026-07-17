@@ -87,7 +87,7 @@ namespace OctoMap.Planning
             object constantValue,
             bool hasNullSubstitute,
             object nullSubstitute)
-            : this(destinationProperty, sourceProperty, sourceExpression, hasConstantValue, constantValue, hasNullSubstitute, nullSubstitute, 0)
+            : this(destinationProperty, sourceProperty, sourceExpression, null, hasConstantValue, constantValue, hasNullSubstitute, nullSubstitute, 0)
         {
         }
 
@@ -97,6 +97,7 @@ namespace OctoMap.Planning
         /// <param name="destinationProperty">The destination property.</param>
         /// <param name="sourceProperty">The source property.</param>
         /// <param name="sourceExpression">The source expression.</param>
+        /// <param name="resolverType">The resolver type.</param>
         /// <param name="hasConstantValue">A value indicating whether this assignment uses a constant value.</param>
         /// <param name="constantValue">The constant value.</param>
         /// <param name="hasNullSubstitute">A value indicating whether this assignment has a null substitute.</param>
@@ -106,6 +107,7 @@ namespace OctoMap.Planning
             PropertyInfo destinationProperty,
             PropertyInfo sourceProperty,
             LambdaExpression sourceExpression,
+            Type resolverType,
             bool hasConstantValue,
             object constantValue,
             bool hasNullSubstitute,
@@ -115,6 +117,7 @@ namespace OctoMap.Planning
             DestinationProperty = destinationProperty ?? throw new ArgumentNullException(nameof(destinationProperty));
             SourceProperty = sourceProperty;
             SourceExpression = sourceExpression;
+            ResolverType = resolverType;
             HasConstantValue = hasConstantValue;
             ConstantValue = constantValue;
             HasNullSubstitute = hasNullSubstitute;
@@ -131,6 +134,11 @@ namespace OctoMap.Planning
         /// Gets the source expression.
         /// </summary>
         public LambdaExpression SourceExpression { get; }
+
+        /// <summary>
+        /// Gets the resolver type.
+        /// </summary>
+        public Type ResolverType { get; }
 
         /// <summary>
         /// Gets whether this assignment uses a constant value.

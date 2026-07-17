@@ -128,9 +128,39 @@ builder.CreateMap<Customer, CustomerDto>()
 Supported member rules:
 
 - `MapFrom(...)`: maps from a source expression.
+- `ResolveUsing<TResolver>()`: resolves a member through a DI service.
 - `UseValue(...)`: assigns a constant value.
 - `NullSubstitute(...)`: replaces null source results for reference-type destination members.
 - `Ignore()`: excludes a destination member.
+
+## DI-Based Resolvers
+
+Resolvers let a destination member use application services while still keeping mapping configuration declarative.
+
+```csharp
+public sealed class OrderTotalTextResolver
+    : IValueResolver<Order, OrderDto, string>
+{
+    public string Resolve(Order source, OrderDto destination, IMapContext context)
+        => $"Total: {source.Total:0.00}";
+}
+```
+
+Configure the member with `ResolveUsing<TResolver>()`.
+
+```csharp
+builder.CreateMap<Order, OrderDto>()
+    .ForMember(x => x.TotalText, x => x.ResolveUsing<OrderTotalTextResolver>());
+```
+
+Register the resolver in DI.
+
+```csharp
+services.AddTransient<OrderTotalTextResolver>();
+services.AddOctoMap(typeof(SalesProfile).Assembly);
+```
+
+Resolvers are resolved from `IMapContext.Services` on every `Map` call. OctoMap does not cache resolver instances, so service lifetimes remain controlled by the application's service provider.
 
 ## Runtime Implicit Maps
 

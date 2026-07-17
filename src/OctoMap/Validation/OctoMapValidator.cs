@@ -86,6 +86,11 @@ namespace OctoMap.Validation
                 }
             }
 
+            if (memberMap.ResolverType != null)
+            {
+                ValidateResolver(map, memberMap, issues);
+            }
+
             if (memberMap.HasConstantValue)
             {
                 ValidateValue(map, memberMap.DestinationProperty.Name, memberMap.ConstantValue, memberMap.DestinationProperty.PropertyType, "constant", issues);
@@ -166,13 +171,13 @@ namespace OctoMap.Validation
                         continue;
                     }
 
-                    if (memberMap.SourceExpression == null && !memberMap.HasConstantValue)
+                    if (memberMap.SourceExpression == null && memberMap.ResolverType == null && !memberMap.HasConstantValue)
                     {
-                        issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"Multi-source member '{memberMap.DestinationProperty.Name}' must be mapped explicitly with MapFrom or UseValue."));
+                        issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"Multi-source member '{memberMap.DestinationProperty.Name}' must be mapped explicitly with MapFrom, ResolveUsing, or UseValue."));
                         continue;
                     }
 
-                    ValidateMemberMap(map, memberMap, issues);
+                    ValidateMemberMap(sourceMap, memberMap, issues);
                 }
             }
 
@@ -347,6 +352,19 @@ namespace OctoMap.Validation
 
         private static bool CanWrite(PropertyInfo property)
             => property.CanWrite && property.SetMethod != null && property.SetMethod.IsPublic;
+
+        private static void ValidateResolver(ITypeMap map, MemberMap memberMap, List<OctoMapValidationIssue> issues)
+        {
+            var resolverContract = typeof(IValueResolver<,,>).MakeGenericType(
+                map.SourceType,
+                map.DestinationType,
+                memberMap.DestinationProperty.PropertyType);
+
+            if (!resolverContract.IsAssignableFrom(memberMap.ResolverType))
+            {
+                issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"Resolver type '{memberMap.ResolverType.FullName}' must implement '{resolverContract.FullName}'."));
+            }
+        }
 
         private static OctoMapValidationIssue CreateIssue(ITypeMap map, string memberName, string message)
             => new(map.SourceType, map.DestinationType, memberName, message);

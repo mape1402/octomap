@@ -35,6 +35,17 @@ namespace OctoMap.Configuration
             _memberMap.IsIgnored = false;
             _memberMap.SourceExpression = sourceExpression ?? throw new ArgumentNullException(nameof(sourceExpression));
             _memberMap.HasConstantValue = false;
+            _memberMap.ResolverType = null;
+        }
+
+        /// <inheritdoc/>
+        public void ResolveUsing<TResolver>()
+            where TResolver : IValueResolver<TSource, TDestination, TMember>
+        {
+            _memberMap.IsIgnored = false;
+            _memberMap.SourceExpression = null;
+            _memberMap.HasConstantValue = false;
+            _memberMap.ResolverType = typeof(TResolver);
         }
 
         /// <inheritdoc/>
@@ -44,6 +55,7 @@ namespace OctoMap.Configuration
             _memberMap.SourceExpression = null;
             _memberMap.HasConstantValue = true;
             _memberMap.ConstantValue = value;
+            _memberMap.ResolverType = null;
         }
 
         /// <inheritdoc/>

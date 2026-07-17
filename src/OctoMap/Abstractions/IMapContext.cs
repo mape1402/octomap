@@ -5,5 +5,9 @@ namespace OctoMap
     /// </summary>
     public interface IMapContext
     {
+        /// <summary>
+        /// Gets the service provider for the current mapping operation.
+        /// </summary>
+        IServiceProvider Services { get; }
     }
 }
