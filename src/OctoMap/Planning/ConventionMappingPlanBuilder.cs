@@ -79,6 +79,23 @@ namespace OctoMap.Planning
 
                 if (!destinationProperty.PropertyType.IsAssignableFrom(sourceProperty.PropertyType))
                 {
+                    if (CanUseNestedMap(sourceProperty.PropertyType, destinationProperty.PropertyType))
+                    {
+                        assignments.Add(new MemberAssignmentPlan(
+                            destinationProperty,
+                            sourceProperty,
+                            null,
+                            null,
+                            null,
+                            null,
+                            true,
+                            false,
+                            null,
+                            false,
+                            null,
+                            0));
+                    }
+
                     continue;
                 }
 
@@ -103,6 +120,7 @@ namespace OctoMap.Planning
                 memberMap?.ResolverType,
                 memberMap?.ConverterType,
                 memberMap?.ConverterSourceExpression,
+                false,
                 memberMap?.HasConstantValue == true,
                 memberMap?.ConstantValue,
                 memberMap?.HasNullSubstitute == true,
@@ -149,6 +167,7 @@ namespace OctoMap.Planning
                     null,
                     null,
                     false,
+                    false,
                     null,
                     false,
                     null,
@@ -171,6 +190,7 @@ namespace OctoMap.Planning
                 resolverType: memberMap?.ResolverType,
                 converterType: memberMap?.ConverterType,
                 converterSourceExpression: memberMap?.ConverterSourceExpression,
+                useNestedMap: false,
                 memberMap?.HasConstantValue == true,
                 memberMap?.ConstantValue,
                 memberMap?.HasNullSubstitute == true,
@@ -193,6 +213,27 @@ namespace OctoMap.Planning
             {
                 throw new InvalidOperationException($"Destination type '{destinationType.FullName}' must have a public parameterless constructor.");
             }
+        }
+
+        private static bool CanUseNestedMap(Type sourceType, Type destinationType)
+        {
+            if (sourceType == typeof(string) || destinationType == typeof(string))
+            {
+                return false;
+            }
+
+            if (sourceType.IsValueType || destinationType.IsValueType)
+            {
+                return false;
+            }
+
+            if (typeof(System.Collections.IEnumerable).IsAssignableFrom(sourceType)
+                || typeof(System.Collections.IEnumerable).IsAssignableFrom(destinationType))
+            {
+                return false;
+            }
+
+            return true;
         }
     }
 }

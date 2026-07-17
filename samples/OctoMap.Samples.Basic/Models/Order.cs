@@ -29,5 +29,10 @@ namespace OctoMap.Samples.Basic.Models
         /// Gets or sets the order currency code.
         /// </summary>
         public string CurrencyCode { get; set; }
+
+        /// <summary>
+        /// Gets or sets the order customer.
+        /// </summary>
+        public Customer Customer { get; set; }
     }
 }

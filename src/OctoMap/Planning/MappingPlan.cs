@@ -88,7 +88,7 @@ namespace OctoMap.Planning
             object constantValue,
             bool hasNullSubstitute,
             object nullSubstitute)
-            : this(destinationProperty, sourceProperty, sourceExpression, null, null, null, hasConstantValue, constantValue, hasNullSubstitute, nullSubstitute, 0)
+            : this(destinationProperty, sourceProperty, sourceExpression, null, null, null, false, hasConstantValue, constantValue, hasNullSubstitute, nullSubstitute, 0)
         {
         }
 
@@ -101,6 +101,7 @@ namespace OctoMap.Planning
         /// <param name="resolverType">The resolver type.</param>
         /// <param name="converterType">The converter type.</param>
         /// <param name="converterSourceExpression">The converter source expression.</param>
+        /// <param name="useNestedMap">A value indicating whether the assignment uses a nested map.</param>
         /// <param name="hasConstantValue">A value indicating whether this assignment uses a constant value.</param>
         /// <param name="constantValue">The constant value.</param>
         /// <param name="hasNullSubstitute">A value indicating whether this assignment has a null substitute.</param>
@@ -113,6 +114,7 @@ namespace OctoMap.Planning
             Type resolverType,
             Type converterType,
             LambdaExpression converterSourceExpression,
+            bool useNestedMap,
             bool hasConstantValue,
             object constantValue,
             bool hasNullSubstitute,
@@ -125,6 +127,7 @@ namespace OctoMap.Planning
             ResolverType = resolverType;
             ConverterType = converterType;
             ConverterSourceExpression = converterSourceExpression;
+            UseNestedMap = useNestedMap;
             HasConstantValue = hasConstantValue;
             ConstantValue = constantValue;
             HasNullSubstitute = hasNullSubstitute;
@@ -156,6 +159,11 @@ namespace OctoMap.Planning
         /// Gets the converter source expression.
         /// </summary>
         public LambdaExpression ConverterSourceExpression { get; }
+
+        /// <summary>
+        /// Gets whether the assignment uses a nested map.
+        /// </summary>
+        public bool UseNestedMap { get; }
 
         /// <summary>
         /// Gets whether this assignment uses a constant value.

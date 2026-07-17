@@ -147,6 +147,10 @@ namespace OctoMap.Generation.Dynabee
             {
                 value = BuildExpression(body, sources, assignment.SourceExpression.Body, assignment.SourceExpression.Parameters[0], assignment.SourceIndex);
             }
+            else if (assignment.UseNestedMap)
+            {
+                value = BuildNestedMapValue(body, sources, context, assignment);
+            }
             else
             {
                 var source = sources[assignment.SourceIndex];
@@ -207,6 +211,30 @@ namespace OctoMap.Generation.Dynabee
             var convertMethod = converterContract.GetMethod(nameof(IValueConverter<object, object>.Convert));
 
             return body.Call(converter, convertMethod, sourceValue, context);
+        }
+
+        private static IBeeValueExpression BuildNestedMapValue(
+            IBeeMethodBodyBuilder body,
+            IReadOnlyList<IBeeValueExpression> sources,
+            IBeeValueExpression context,
+            MemberAssignmentPlan assignment)
+        {
+            var source = sources[assignment.SourceIndex];
+            var sourceValue = body.Property(source, assignment.SourceProperty.Name);
+            var services = body.Property(context, nameof(IMapContext.Services));
+            var mapper = body.StaticCall(GetRequiredServiceMethod(typeof(IOctoMapper)), services);
+            var mapMethod = typeof(IOctoMapper)
+                .GetMethods()
+                .Single(x => x.Name == nameof(IOctoMapper.Map)
+                    && x.IsGenericMethodDefinition
+                    && x.GetGenericArguments().Length == 2)
+                .MakeGenericMethod(sourceValue.Type, assignment.DestinationProperty.PropertyType);
+            var mappedValue = body.Call(mapper, mapMethod, sourceValue);
+
+            return body.If(
+                body.IsNull(sourceValue),
+                body.Default(assignment.DestinationProperty.PropertyType),
+                mappedValue);
         }
 
         private static IBeeValueExpression BuildExpression(

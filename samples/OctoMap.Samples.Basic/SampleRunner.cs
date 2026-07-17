@@ -48,10 +48,17 @@ namespace OctoMap.Samples.Basic
                 StatusCode = "NEW",
                 Description = null,
                 Total = 149.99m,
-                CurrencyCode = "USD"
+                CurrencyCode = "USD",
+                Customer = new Customer
+                {
+                    Id = 102,
+                    FirstName = "Katherine",
+                    LastName = "Johnson",
+                    InternalCode = "nested-secret"
+                }
             });
 
-            Console.WriteLine($"Resolver and value converter: {orderDto.Id} - {orderDto.Status} - {orderDto.Description} - {orderDto.StatusLabel} - {orderDto.TotalText}");
+            Console.WriteLine($"Resolver, value converter, nested map: {orderDto.Id} - {orderDto.Status} - {orderDto.Description} - {orderDto.StatusLabel} - {orderDto.TotalText} - {orderDto.Customer.FullName}");
 
             var registeredByInterface = _mapper.Map<WarehouseItemDto>(new WarehouseItem
             {
