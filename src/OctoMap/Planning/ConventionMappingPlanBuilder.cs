@@ -8,6 +8,17 @@ namespace OctoMap.Planning
     /// </summary>
     internal sealed class ConventionMappingPlanBuilder : IMappingPlanBuilder
     {
+        private readonly OctoMapOptions _options;
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ConventionMappingPlanBuilder"/> class.
+        /// </summary>
+        /// <param name="options">The OctoMap options.</param>
+        public ConventionMappingPlanBuilder(OctoMapOptions options)
+        {
+            _options = options ?? throw new ArgumentNullException(nameof(options));
+        }
+
         /// <inheritdoc/>
         public MappingPlan Build(ITypeMap typeMap)
         {
@@ -99,6 +110,7 @@ namespace OctoMap.Planning
                             CollectionShape.None,
                             null,
                             null,
+                            true,
                             false,
                             null,
                             false,
@@ -135,6 +147,7 @@ namespace OctoMap.Planning
                 CollectionShape.None,
                 null,
                 null,
+                true,
                 memberMap?.HasConstantValue == true,
                 memberMap?.ConstantValue,
                 memberMap?.HasNullSubstitute == true,
@@ -185,6 +198,7 @@ namespace OctoMap.Planning
                     CollectionShape.None,
                     null,
                     null,
+                    true,
                     false,
                     null,
                     false,
@@ -213,6 +227,7 @@ namespace OctoMap.Planning
                 destinationCollectionShape: CollectionShape.None,
                 sourceElementType: null,
                 destinationElementType: null,
+                allowNullCollection: true,
                 memberMap?.HasConstantValue == true,
                 memberMap?.ConstantValue,
                 memberMap?.HasNullSubstitute == true,
@@ -258,7 +273,7 @@ namespace OctoMap.Planning
             return true;
         }
 
-        private static bool TryCreateCollectionAssignment(
+        private bool TryCreateCollectionAssignment(
             PropertyInfo destinationProperty,
             PropertyInfo sourceProperty,
             out MemberAssignmentPlan assignment)
@@ -282,6 +297,7 @@ namespace OctoMap.Planning
                 destinationShape,
                 sourceElementType,
                 destinationElementType,
+                _options.AllowNullCollections,
                 false,
                 null,
                 false,
@@ -306,8 +322,36 @@ namespace OctoMap.Planning
                 return true;
             }
 
+            if (TryGetSupportedGenericCollectionElement(type, out elementType))
+            {
+                shape = CollectionShape.Enumerable;
+                return true;
+            }
+
             shape = CollectionShape.None;
             elementType = null;
+            return false;
+        }
+
+        private static bool TryGetSupportedGenericCollectionElement(Type type, out Type elementType)
+        {
+            elementType = null;
+            if (!type.IsGenericType)
+            {
+                return false;
+            }
+
+            var genericDefinition = type.GetGenericTypeDefinition();
+            if (genericDefinition == typeof(IEnumerable<>)
+                || genericDefinition == typeof(ICollection<>)
+                || genericDefinition == typeof(IReadOnlyCollection<>)
+                || genericDefinition == typeof(IList<>)
+                || genericDefinition == typeof(IReadOnlyList<>))
+            {
+                elementType = type.GetGenericArguments()[0];
+                return true;
+            }
+
             return false;
         }
     }

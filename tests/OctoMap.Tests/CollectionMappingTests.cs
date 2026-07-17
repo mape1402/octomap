@@ -77,6 +77,46 @@ namespace OctoMap.Tests
         }
 
         [Fact]
+        public void Map_Normalizes_Enumerable_Source_And_Assigns_List_To_Interface_Destination()
+        {
+            var provider = CreateProvider<InterfaceCollectionProfile>();
+            var mapper = provider.GetRequiredService<IOctoMapper>();
+
+            var destination = mapper.Map<InterfaceOrder, InterfaceOrderDto>(new InterfaceOrder
+            {
+                Items = new[]
+                {
+                    new ImplicitOrderItem { Sku = "A-1", Quantity = 2 },
+                    new ImplicitOrderItem { Sku = "B-2", Quantity = 5 }
+                }
+            });
+
+            Assert.NotNull(destination.Items);
+            Assert.Equal(2, destination.Items.Count);
+            Assert.Equal("A-1", destination.Items[0].Sku);
+            Assert.Equal(5, destination.Items[1].Quantity);
+        }
+
+        [Fact]
+        public void Map_Assigns_Empty_Collection_When_Source_Is_Null_And_Null_Collections_Are_Disabled()
+        {
+            var services = new ServiceCollection();
+            services.AddOctoMap(
+                options => options.AllowNullCollections = false,
+                typeof(ConfiguredCollectionProfile).Assembly);
+            var provider = services.BuildServiceProvider();
+            var mapper = provider.GetRequiredService<IOctoMapper>();
+
+            var destination = mapper.Map<Order, OrderDto>(new Order
+            {
+                Items = null
+            });
+
+            Assert.NotNull(destination.Items);
+            Assert.Empty(destination.Items);
+        }
+
+        [Fact]
         public void Map_Throws_When_Item_Map_Is_Not_Configured_And_Implicit_Maps_Are_Disabled()
         {
             var services = new ServiceCollection();
@@ -125,6 +165,14 @@ namespace OctoMap.Tests
             public override void Configure(IOctoMapConfigurationBuilder builder)
             {
                 builder.CreateMap<TagSource, TagDestination>();
+            }
+        }
+
+        public sealed class InterfaceCollectionProfile : OctoMapProfile
+        {
+            public override void Configure(IOctoMapConfigurationBuilder builder)
+            {
+                builder.CreateMap<InterfaceOrder, InterfaceOrderDto>();
             }
         }
 
@@ -182,6 +230,16 @@ namespace OctoMap.Tests
         public sealed class TagDestination
         {
             public List<string> Tags { get; set; }
+        }
+
+        public sealed class InterfaceOrder
+        {
+            public IEnumerable<ImplicitOrderItem> Items { get; set; }
+        }
+
+        public sealed class InterfaceOrderDto
+        {
+            public IReadOnlyList<ImplicitOrderItemDto> Items { get; set; }
         }
     }
 }

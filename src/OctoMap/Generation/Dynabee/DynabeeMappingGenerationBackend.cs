@@ -225,24 +225,33 @@ namespace OctoMap.Generation.Dynabee
         {
             var source = sources[assignment.SourceIndex];
             var sourceCollection = body.Property(source, assignment.SourceProperty.Name);
-            var destinationCollection = body.DeclareLocal($"collection_{assignment.DestinationProperty.Name}", assignment.DestinationProperty.PropertyType);
+            var destinationCollectionType = GetDestinationCollectionRuntimeType(assignment);
+            var destinationCollection = body.DeclareLocal($"collection_{assignment.DestinationProperty.Name}", destinationCollectionType);
 
             body.If(
                 body.IsNull(sourceCollection),
-                whenTrue => whenTrue.Assign(destinationCollection, body.Default(assignment.DestinationProperty.PropertyType)),
+                whenTrue => whenTrue.Assign(
+                    destinationCollection,
+                    assignment.AllowNullCollection
+                        ? body.Default(destinationCollectionType)
+                        : CreateDestinationCollection(body, assignment, body.Constant(0))),
                 whenFalse =>
                 {
-                    var count = BuildCollectionCountValue(whenFalse, sourceCollection, assignment.SourceCollectionShape);
+                    var indexedSourceCollection = NormalizeSourceCollection(whenFalse, sourceCollection, assignment);
+                    var indexedSourceShape = assignment.SourceCollectionShape == CollectionShape.Array
+                        ? CollectionShape.Array
+                        : CollectionShape.List;
+                    var count = BuildCollectionCountValue(whenFalse, indexedSourceCollection, indexedSourceShape);
                     whenFalse.Assign(destinationCollection, CreateDestinationCollection(whenFalse, assignment, count));
 
                     var index = whenFalse.DeclareLocal($"index_{assignment.DestinationProperty.Name}", typeof(int));
                     whenFalse.For(
                         initialize: loop => loop.Assign(index, loop.Constant(0)),
-                        condition: loop => loop.LessThan(index, BuildCollectionCountValue(loop, sourceCollection, assignment.SourceCollectionShape)),
+                        condition: loop => loop.LessThan(index, BuildCollectionCountValue(loop, indexedSourceCollection, indexedSourceShape)),
                         increment: loop => loop.Assign(index, loop.Add(index, loop.Constant(1))),
                         body: loop =>
                         {
-                            var sourceItem = loop.Index(sourceCollection, index);
+                            var sourceItem = loop.Index(indexedSourceCollection, index);
                             var destinationItem = BuildCollectionItemValue(loop, sourceItem, context, assignment);
                             AssignCollectionItem(loop, destinationCollection, index, destinationItem, assignment);
                         });
@@ -265,7 +274,23 @@ namespace OctoMap.Generation.Dynabee
             IBeeValueExpression count)
             => assignment.DestinationCollectionShape == CollectionShape.Array
                 ? body.NewArray(assignment.DestinationElementType, count)
-                : body.New(assignment.DestinationProperty.PropertyType, count);
+                : body.New(GetDestinationCollectionRuntimeType(assignment), count);
+
+        private static IBeeValueExpression NormalizeSourceCollection(
+            IBeeMethodBodyBuilder body,
+            IBeeValueExpression sourceCollection,
+            MemberAssignmentPlan assignment)
+        {
+            if (assignment.SourceCollectionShape is CollectionShape.Array or CollectionShape.List)
+            {
+                return sourceCollection;
+            }
+
+            var listType = typeof(List<>).MakeGenericType(assignment.SourceElementType);
+            var sourceList = body.DeclareLocal($"sourceCollection_{assignment.DestinationProperty.Name}", listType);
+            body.Assign(sourceList, body.StaticCall(GetEnumerableToListMethod(assignment.SourceElementType), sourceCollection));
+            return sourceList;
+        }
 
         private static IBeeValueExpression BuildCollectionItemValue(
             IBeeMethodBodyBuilder body,
@@ -305,11 +330,16 @@ namespace OctoMap.Generation.Dynabee
                 return;
             }
 
-            var addMethod = assignment.DestinationProperty.PropertyType.GetMethod(
+            var addMethod = destinationCollection.Type.GetMethod(
                 nameof(List<object>.Add),
                 new[] { assignment.DestinationElementType });
             body.Evaluate(body.Call(destinationCollection, addMethod, destinationItem));
         }
+
+        private static Type GetDestinationCollectionRuntimeType(MemberAssignmentPlan assignment)
+            => assignment.DestinationCollectionShape == CollectionShape.Array
+                ? assignment.DestinationProperty.PropertyType
+                : typeof(List<>).MakeGenericType(assignment.DestinationElementType);
 
         private static IBeeValueExpression BuildNestedMapValue(
             IBeeMethodBodyBuilder body,
@@ -471,6 +501,14 @@ namespace OctoMap.Generation.Dynabee
                     && x.GetParameters().Length == 1
                     && x.GetParameters()[0].ParameterType == typeof(IServiceProvider))
                 .MakeGenericMethod(serviceType);
+
+        private static MethodInfo GetEnumerableToListMethod(Type elementType)
+            => typeof(Enumerable)
+                .GetMethods(BindingFlags.Public | BindingFlags.Static)
+                .Single(x => x.Name == nameof(Enumerable.ToList)
+                    && x.IsGenericMethodDefinition
+                    && x.GetParameters().Length == 1)
+                .MakeGenericMethod(elementType);
 
     }
 }

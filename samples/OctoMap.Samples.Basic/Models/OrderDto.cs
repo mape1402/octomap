@@ -38,6 +38,6 @@ namespace OctoMap.Samples.Basic.Models
         /// <summary>
         /// Gets or sets the order items.
         /// </summary>
-        public List<OrderItemDto> Items { get; set; }
+        public IReadOnlyList<OrderItemDto> Items { get; set; }
     }
 }

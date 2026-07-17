@@ -88,7 +88,7 @@ namespace OctoMap.Planning
             object constantValue,
             bool hasNullSubstitute,
             object nullSubstitute)
-            : this(destinationProperty, sourceProperty, sourceExpression, null, null, null, false, CollectionShape.None, CollectionShape.None, null, null, hasConstantValue, constantValue, hasNullSubstitute, nullSubstitute, 0)
+            : this(destinationProperty, sourceProperty, sourceExpression, null, null, null, false, CollectionShape.None, CollectionShape.None, null, null, true, hasConstantValue, constantValue, hasNullSubstitute, nullSubstitute, 0)
         {
         }
 
@@ -106,6 +106,7 @@ namespace OctoMap.Planning
         /// <param name="destinationCollectionShape">The destination collection shape.</param>
         /// <param name="sourceElementType">The source element type.</param>
         /// <param name="destinationElementType">The destination element type.</param>
+        /// <param name="allowNullCollection">A value indicating whether null source collections are mapped as null destination collections.</param>
         /// <param name="hasConstantValue">A value indicating whether this assignment uses a constant value.</param>
         /// <param name="constantValue">The constant value.</param>
         /// <param name="hasNullSubstitute">A value indicating whether this assignment has a null substitute.</param>
@@ -123,6 +124,7 @@ namespace OctoMap.Planning
             CollectionShape destinationCollectionShape,
             Type sourceElementType,
             Type destinationElementType,
+            bool allowNullCollection,
             bool hasConstantValue,
             object constantValue,
             bool hasNullSubstitute,
@@ -140,6 +142,7 @@ namespace OctoMap.Planning
             DestinationCollectionShape = destinationCollectionShape;
             SourceElementType = sourceElementType;
             DestinationElementType = destinationElementType;
+            AllowNullCollection = allowNullCollection;
             HasConstantValue = hasConstantValue;
             ConstantValue = constantValue;
             HasNullSubstitute = hasNullSubstitute;
@@ -201,6 +204,11 @@ namespace OctoMap.Planning
         /// Gets whether the assignment uses collection mapping.
         /// </summary>
         public bool UseCollectionMap => SourceCollectionShape != CollectionShape.None && DestinationCollectionShape != CollectionShape.None;
+
+        /// <summary>
+        /// Gets whether null source collections are mapped as null destination collections.
+        /// </summary>
+        public bool AllowNullCollection { get; }
 
         /// <summary>
         /// Gets whether this assignment uses a constant value.

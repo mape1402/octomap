@@ -12,6 +12,9 @@ OctoMap is designed for applications that want AutoMapper-style configuration, b
 - Supports runtime implicit single-source maps with caching.
 - Supports interface-based registration through `IMapFrom<T>` and `IMapTo<T>`.
 - Supports explicit multi-source maps into one destination.
+- Supports nested object mapping.
+- Supports array, `List<T>`, and common collection interface member mapping.
+- Supports DI-based value resolvers and value converters.
 - Uses DynaBee-generated method bodies and invokers for hot execution paths.
 - Integrates with `Microsoft.Extensions.DependencyInjection`.
 
@@ -128,21 +131,72 @@ builder.CreateMap<Customer, CustomerDto>()
 Supported member rules:
 
 - `MapFrom(...)`: maps from a source expression.
+- `ConvertUsing<TConverter>(...)`: converts a source member value through a DI service.
 - `ResolveUsing<TResolver>()`: resolves a member through a DI service.
 - `UseValue(...)`: assigns a constant value.
 - `NullSubstitute(...)`: replaces null source results for reference-type destination members.
 - `Ignore()`: excludes a destination member.
 
-## DI-Based Resolvers
+## DI-Based Value Converters
 
-Resolvers let a destination member use application services while still keeping mapping configuration declarative.
+Value converters transform one source member value into one destination member value. They are useful when the conversion depends on application services, formatting rules, localization, or domain policies.
 
 ```csharp
-public sealed class OrderTotalTextResolver
+public sealed class OrderTotalTextConverter : IValueConverter<decimal, string>
+{
+    private readonly ICurrencyFormatter _currencyFormatter;
+
+    public OrderTotalTextConverter(ICurrencyFormatter currencyFormatter)
+    {
+        _currencyFormatter = currencyFormatter;
+    }
+
+    public string Convert(decimal sourceMember, IMapContext context)
+        => _currencyFormatter.Format(sourceMember, "USD");
+}
+```
+
+Configure the member with `ConvertUsing<TConverter>(...)`.
+
+```csharp
+builder.CreateMap<Order, OrderDto>()
+    .ForMember(x => x.TotalText, x => x.ConvertUsing<OrderTotalTextConverter>(s => s.Total));
+```
+
+Register the converter and its dependencies in DI.
+
+```csharp
+services.AddSingleton<ICurrencyFormatter, CurrencyFormatter>();
+services.AddTransient<OrderTotalTextConverter>();
+services.AddOctoMap(typeof(SalesProfile).Assembly);
+```
+
+Converters are resolved from `IMapContext.Services` on every `Map` call, so scoped, transient, and singleton lifetimes remain controlled by the application service provider.
+
+## DI-Based Resolvers
+
+Resolvers let a destination member use the full source object, the partially built destination object, and application services while still keeping mapping configuration declarative.
+
+```csharp
+public sealed class OrderStatusLabelResolver
     : IValueResolver<Order, OrderDto, string>
 {
+    private readonly IOrderStatusCatalog _statusCatalog;
+    private readonly IOrderLabelFormatter _labelFormatter;
+
+    public OrderStatusLabelResolver(
+        IOrderStatusCatalog statusCatalog,
+        IOrderLabelFormatter labelFormatter)
+    {
+        _statusCatalog = statusCatalog;
+        _labelFormatter = labelFormatter;
+    }
+
     public string Resolve(Order source, OrderDto destination, IMapContext context)
-        => $"Total: {source.Total:0.00}";
+    {
+        var status = _statusCatalog.GetDisplayName(source.StatusCode);
+        return _labelFormatter.FormatStatusLabel(source.Id, status);
+    }
 }
 ```
 
@@ -150,13 +204,13 @@ Configure the member with `ResolveUsing<TResolver>()`.
 
 ```csharp
 builder.CreateMap<Order, OrderDto>()
-    .ForMember(x => x.TotalText, x => x.ResolveUsing<OrderTotalTextResolver>());
+    .ForMember(x => x.StatusLabel, x => x.ResolveUsing<OrderStatusLabelResolver>());
 ```
 
 Register the resolver in DI.
 
 ```csharp
-services.AddTransient<OrderTotalTextResolver>();
+services.AddTransient<OrderStatusLabelResolver>();
 services.AddOctoMap(typeof(SalesProfile).Assembly);
 ```
 
@@ -191,6 +245,92 @@ public sealed class ProductDto
 ```
 
 Runtime implicit maps are single-source only. Multi-source maps must be configured explicitly.
+
+## Nested Object Mapping
+
+OctoMap can map nested object members by convention when the source and destination property names match and the member types are mappable.
+
+```csharp
+public sealed class Order
+{
+    public Customer Customer { get; set; }
+}
+
+public sealed class OrderDto
+{
+    public CustomerDto Customer { get; set; }
+}
+```
+
+Configure the parent and child maps:
+
+```csharp
+builder.CreateMap<Order, OrderDto>();
+
+builder.CreateMap<Customer, CustomerDto>()
+    .ForMember(x => x.FullName, x => x.MapFrom(s => s.FirstName + " " + s.LastName));
+```
+
+The generated `Order -> OrderDto` mapper calls the cached `Customer -> CustomerDto` map for the nested member. If the nested source value is `null`, the destination member is assigned `null`.
+
+If a nested child map is not configured and runtime implicit maps are enabled, OctoMap can create the child map by convention. If runtime implicit maps are disabled, the map fails with a clear runtime configuration error.
+
+## Collection Mapping
+
+OctoMap supports collection member mapping by convention when the source and destination property names match and the element types are assignable or mappable.
+
+Supported source shapes:
+
+- `T[]`
+- `List<T>`
+- `IEnumerable<T>`
+- `ICollection<T>`
+- `IReadOnlyCollection<T>`
+- `IList<T>`
+- `IReadOnlyList<T>`
+
+Supported destination shapes:
+
+- `T[]`
+- `List<T>`
+- `IEnumerable<T>`
+- `ICollection<T>`
+- `IReadOnlyCollection<T>`
+- `IList<T>`
+- `IReadOnlyList<T>`
+
+Example:
+
+```csharp
+public sealed class Order
+{
+    public IEnumerable<OrderItem> Items { get; set; }
+}
+
+public sealed class OrderDto
+{
+    public IReadOnlyList<OrderItemDto> Items { get; set; }
+}
+```
+
+Configure the parent and item maps:
+
+```csharp
+builder.CreateMap<Order, OrderDto>();
+
+builder.CreateMap<OrderItem, OrderItemDto>()
+    .ForMember(x => x.Label, x => x.MapFrom(s => s.Sku + " x " + s.Quantity));
+```
+
+OctoMap generates a loop through DynaBee. If the item type needs a map, OctoMap uses the cached item mapper per element. If the item type is already assignable, OctoMap copies the item value/reference.
+
+By default, null source collections map to null destination collections. You can map null collections to empty collections globally:
+
+```csharp
+services.AddOctoMap(
+    options => options.AllowNullCollections = false,
+    typeof(SalesProfile).Assembly);
+```
 
 ## Interface-Based Registration
 
@@ -327,7 +467,7 @@ Expected output:
 ```text
 Configured map: 100 - Grace Hopper - internal 'ignored'
 Implicit map: OCTO-001 - 49.95
-Value rules: 700 - Created - No description
+Resolver, value converter, nested map, collection map: 700 - NEW - No description - Order #0700 is Created - 149.99 USD - Katherine Johnson - 2 items
 Interface map: WH-42
 Multi-source map: 701 - Ada - Priority order - Ada
 ```
@@ -348,12 +488,12 @@ dotnet run -c Release -f net8.0 --project benchmarks/OctoMap.Benchmarks/OctoMap.
 
 ## Current Status
 
-OctoMap is in early alpha. The core runtime path, explicit maps, runtime implicit single-source maps, interface-based map registration, explicit multi-source maps, validation, tests, sample project, and DynaBee-backed generation are implemented.
+OctoMap is in early alpha. The core runtime path, explicit maps, runtime implicit single-source maps, interface-based map registration, explicit multi-source maps, nested mapping, collection mapping, DI resolvers, value converters, validation, tests, sample project, and DynaBee-backed generation are implemented.
 
 Upcoming areas include:
 
-- converters and resolvers
-- nested mapping composition
 - broader expression support
+- per-member null collection rules
+- richer collection destination support
 - richer diagnostics
 - benchmarks against manual mapping and AutoMapper

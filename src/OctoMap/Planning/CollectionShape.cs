@@ -18,6 +18,11 @@ namespace OctoMap.Planning
         /// <summary>
         /// Indicates a closed generic <see cref="List{T}"/>.
         /// </summary>
-        List
+        List,
+
+        /// <summary>
+        /// Indicates a generic enumerable that must be normalized before indexed iteration.
+        /// </summary>
+        Enumerable
     }
 }
