@@ -38,6 +38,16 @@ namespace OctoMap.Configuration
         public Type ResolverType { get; set; }
 
         /// <summary>
+        /// Gets or sets the converter type.
+        /// </summary>
+        public Type ConverterType { get; set; }
+
+        /// <summary>
+        /// Gets or sets the converter source expression.
+        /// </summary>
+        public LambdaExpression ConverterSourceExpression { get; set; }
+
+        /// <summary>
         /// Gets or sets whether this member uses a constant value.
         /// </summary>
         public bool HasConstantValue { get; set; }

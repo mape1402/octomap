@@ -2,7 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace OctoMap.Tests
 {
-    public class Phase1MappingTests
+    public class SingleSourceMappingTests
     {
         [Fact]
         public void Map_Uses_Profile_Configured_Map()

@@ -2,10 +2,10 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace OctoMap.Tests
 {
-    public class Phase3MultiSourceTests
+    public class MultiSourceMappingTests
     {
         [Fact]
-        public void Explicit_Multi_Source_Map_Maps_Source_Local_And_Context_Members()
+        public void Map_Uses_Explicit_Multi_Source_Configuration()
         {
             var provider = CreateProvider();
             var mapper = provider.GetRequiredService<IOctoMapper>();
@@ -29,7 +29,7 @@ namespace OctoMap.Tests
         }
 
         [Fact]
-        public void Multi_Source_Map_Must_Be_Configured_Explicitly()
+        public void Map_Throws_When_Multi_Source_Map_Is_Not_Configured()
         {
             var provider = CreateProvider();
             var mapper = provider.GetRequiredService<IOctoMapper>();
@@ -42,7 +42,7 @@ namespace OctoMap.Tests
         }
 
         [Fact]
-        public void Source_Set_Rejects_Ambiguous_Type_Lookups()
+        public void SourceSet_Get_Throws_When_Source_Type_Is_Ambiguous()
         {
             var sources = SourceSet.Of(new AmbiguousOrder(), new SpecialAmbiguousOrder());
 
@@ -52,7 +52,7 @@ namespace OctoMap.Tests
         }
 
         [Fact]
-        public void Multi_Source_Validation_Rejects_Duplicate_Destination_Members()
+        public void Validate_Returns_Issue_When_Destination_Member_Is_Configured_More_Than_Once()
         {
             var configuration = BuildConfiguration<DuplicateDestinationProfile>();
 
@@ -63,7 +63,7 @@ namespace OctoMap.Tests
         }
 
         [Fact]
-        public void Multi_Source_Validation_Rejects_Ambiguous_Context_Source()
+        public void Validate_Returns_Issue_When_Context_Source_Is_Ambiguous()
         {
             var configuration = BuildConfiguration<AmbiguousContextProfile>();
 

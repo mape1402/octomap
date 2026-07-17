@@ -2,7 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace OctoMap.Tests
 {
-    public class Phase4ResolverTests
+    public class ValueResolverMappingTests
     {
         [Fact]
         public void ResolveUsing_Resolves_Member_From_ServiceProvider()

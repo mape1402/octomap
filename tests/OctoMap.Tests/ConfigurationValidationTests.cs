@@ -2,10 +2,10 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace OctoMap.Tests
 {
-    public class Phase2ValidationTests
+    public class ConfigurationValidationTests
     {
         [Fact]
-        public void Validate_Returns_Report_For_Invalid_Destination_Constructor()
+        public void Validate_Returns_Issue_For_Invalid_Destination_Constructor()
         {
             var services = new ServiceCollection();
             services.AddOctoMap(typeof(InvalidConstructorProfile).Assembly);
@@ -32,7 +32,7 @@ namespace OctoMap.Tests
         }
 
         [Fact]
-        public void Runtime_Map_Throws_Validation_Exception_For_Unsupported_Expression()
+        public void Map_Throws_Validation_Exception_For_Unsupported_Expression()
         {
             var services = new ServiceCollection();
             services.AddOctoMap(typeof(UnsupportedExpressionProfile).Assembly);

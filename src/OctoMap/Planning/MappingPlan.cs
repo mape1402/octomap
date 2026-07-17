@@ -62,6 +62,7 @@ namespace OctoMap.Planning
         /// Gets the member assignment plans.
         /// </summary>
         public IReadOnlyList<MemberAssignmentPlan> Assignments { get; }
+
     }
 
     /// <summary>
@@ -87,7 +88,7 @@ namespace OctoMap.Planning
             object constantValue,
             bool hasNullSubstitute,
             object nullSubstitute)
-            : this(destinationProperty, sourceProperty, sourceExpression, null, hasConstantValue, constantValue, hasNullSubstitute, nullSubstitute, 0)
+            : this(destinationProperty, sourceProperty, sourceExpression, null, null, null, hasConstantValue, constantValue, hasNullSubstitute, nullSubstitute, 0)
         {
         }
 
@@ -98,6 +99,8 @@ namespace OctoMap.Planning
         /// <param name="sourceProperty">The source property.</param>
         /// <param name="sourceExpression">The source expression.</param>
         /// <param name="resolverType">The resolver type.</param>
+        /// <param name="converterType">The converter type.</param>
+        /// <param name="converterSourceExpression">The converter source expression.</param>
         /// <param name="hasConstantValue">A value indicating whether this assignment uses a constant value.</param>
         /// <param name="constantValue">The constant value.</param>
         /// <param name="hasNullSubstitute">A value indicating whether this assignment has a null substitute.</param>
@@ -108,6 +111,8 @@ namespace OctoMap.Planning
             PropertyInfo sourceProperty,
             LambdaExpression sourceExpression,
             Type resolverType,
+            Type converterType,
+            LambdaExpression converterSourceExpression,
             bool hasConstantValue,
             object constantValue,
             bool hasNullSubstitute,
@@ -118,6 +123,8 @@ namespace OctoMap.Planning
             SourceProperty = sourceProperty;
             SourceExpression = sourceExpression;
             ResolverType = resolverType;
+            ConverterType = converterType;
+            ConverterSourceExpression = converterSourceExpression;
             HasConstantValue = hasConstantValue;
             ConstantValue = constantValue;
             HasNullSubstitute = hasNullSubstitute;
@@ -139,6 +146,16 @@ namespace OctoMap.Planning
         /// Gets the resolver type.
         /// </summary>
         public Type ResolverType { get; }
+
+        /// <summary>
+        /// Gets the converter type.
+        /// </summary>
+        public Type ConverterType { get; }
+
+        /// <summary>
+        /// Gets the converter source expression.
+        /// </summary>
+        public LambdaExpression ConverterSourceExpression { get; }
 
         /// <summary>
         /// Gets whether this assignment uses a constant value.

@@ -21,8 +21,6 @@ namespace OctoMap.Planning
                 return BuildMultiSource(multiSourceTypeMap);
             }
 
-            EnsureDestinationCanBeCreated(typeMap.DestinationType);
-
             var sourceProperties = typeMap.SourceType
                 .GetProperties(BindingFlags.Instance | BindingFlags.Public)
                 .Where(x => x.CanRead && x.GetMethod != null)
@@ -31,6 +29,8 @@ namespace OctoMap.Planning
             var explicitMemberMaps = typeMap is TypeMap configuredTypeMap
                 ? configuredTypeMap.MemberMaps
                 : new Dictionary<string, MemberMap>(StringComparer.OrdinalIgnoreCase);
+
+            EnsureDestinationCanBeCreated(typeMap.DestinationType);
 
             var assignments = new List<MemberAssignmentPlan>();
             foreach (var destinationProperty in typeMap.DestinationType.GetProperties(BindingFlags.Instance | BindingFlags.Public))
@@ -44,6 +44,12 @@ namespace OctoMap.Planning
                 {
                     if (memberMap.IsIgnored)
                     {
+                        continue;
+                    }
+
+                    if (memberMap.ConverterType != null)
+                    {
+                        assignments.Add(CreateAssignment(destinationProperty, null, null, memberMap));
                         continue;
                     }
 
@@ -95,6 +101,8 @@ namespace OctoMap.Planning
                 sourceProperty,
                 sourceExpression,
                 memberMap?.ResolverType,
+                memberMap?.ConverterType,
+                memberMap?.ConverterSourceExpression,
                 memberMap?.HasConstantValue == true,
                 memberMap?.ConstantValue,
                 memberMap?.HasNullSubstitute == true,
@@ -138,6 +146,8 @@ namespace OctoMap.Planning
                     null,
                     memberMap.SourceExpression,
                     null,
+                    null,
+                    null,
                     false,
                     null,
                     false,
@@ -159,6 +169,8 @@ namespace OctoMap.Planning
                 sourceProperty,
                 sourceExpression,
                 resolverType: memberMap?.ResolverType,
+                converterType: memberMap?.ConverterType,
+                converterSourceExpression: memberMap?.ConverterSourceExpression,
                 memberMap?.HasConstantValue == true,
                 memberMap?.ConstantValue,
                 memberMap?.HasNullSubstitute == true,

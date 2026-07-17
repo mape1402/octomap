@@ -2,10 +2,10 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace OctoMap.Tests
 {
-    public class Phase2MemberRuleTests
+    public class MemberMappingRuleTests
     {
         [Fact]
-        public void MapFrom_Maps_Destination_Member_From_Source_Expression()
+        public void MapFrom_Uses_Configured_Source_Expression()
         {
             var services = new ServiceCollection();
             services.AddOctoMap(typeof(MemberRuleProfile).Assembly);

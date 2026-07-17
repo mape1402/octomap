@@ -2,10 +2,10 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace OctoMap.Tests
 {
-    public class Phase2ValueRuleTests
+    public class ValueMappingRuleTests
     {
         [Fact]
-        public void UseValue_Maps_Constant_Value()
+        public void UseValue_Assigns_Configured_Constant_Value()
         {
             var services = new ServiceCollection();
             services.AddOctoMap(typeof(ValueRuleProfile).Assembly);

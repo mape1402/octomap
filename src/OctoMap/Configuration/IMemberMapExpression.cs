@@ -22,6 +22,22 @@ namespace OctoMap
         void MapFrom(Expression<Func<TSource, TMember>> sourceExpression);
 
         /// <summary>
+        /// Converts a source member value through a service resolved from the mapping context service provider.
+        /// </summary>
+        /// <typeparam name="TConverter">The converter type.</typeparam>
+        /// <param name="sourceExpression">The source member expression.</param>
+        void ConvertUsing<TConverter>(Expression<Func<TSource, object>> sourceExpression);
+
+        /// <summary>
+        /// Converts a source member value through a service resolved from the mapping context service provider.
+        /// </summary>
+        /// <typeparam name="TConverter">The converter type.</typeparam>
+        /// <typeparam name="TSourceMember">The source member type.</typeparam>
+        /// <param name="sourceExpression">The source member expression.</param>
+        void ConvertUsing<TConverter, TSourceMember>(Expression<Func<TSource, TSourceMember>> sourceExpression)
+            where TConverter : IValueConverter<TSourceMember, TMember>;
+
+        /// <summary>
         /// Resolves this destination member through a service resolved from the mapping context service provider.
         /// </summary>
         /// <typeparam name="TResolver">The resolver type.</typeparam>

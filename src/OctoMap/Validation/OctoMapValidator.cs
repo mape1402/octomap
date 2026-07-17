@@ -91,6 +91,11 @@ namespace OctoMap.Validation
                 ValidateResolver(map, memberMap, issues);
             }
 
+            if (memberMap.ConverterType != null)
+            {
+                ValidateConverter(map, memberMap, issues);
+            }
+
             if (memberMap.HasConstantValue)
             {
                 ValidateValue(map, memberMap.DestinationProperty.Name, memberMap.ConstantValue, memberMap.DestinationProperty.PropertyType, "constant", issues);
@@ -100,7 +105,7 @@ namespace OctoMap.Validation
             {
                 if (memberMap.DestinationProperty.PropertyType.IsValueType)
                 {
-                    issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"NullSubstitute is only supported for reference-type destination members in this phase."));
+                    issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"NullSubstitute is only supported for reference-type destination members."));
                 }
 
                 ValidateValue(map, memberMap.DestinationProperty.Name, memberMap.NullSubstitute, memberMap.DestinationProperty.PropertyType, "null substitute", issues);
@@ -171,9 +176,9 @@ namespace OctoMap.Validation
                         continue;
                     }
 
-                    if (memberMap.SourceExpression == null && memberMap.ResolverType == null && !memberMap.HasConstantValue)
+                    if (memberMap.SourceExpression == null && memberMap.ResolverType == null && memberMap.ConverterType == null && !memberMap.HasConstantValue)
                     {
-                        issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"Multi-source member '{memberMap.DestinationProperty.Name}' must be mapped explicitly with MapFrom, ResolveUsing, or UseValue."));
+                        issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"Multi-source member '{memberMap.DestinationProperty.Name}' must be mapped explicitly with MapFrom, ConvertUsing, ResolveUsing, or UseValue."));
                         continue;
                     }
 
@@ -346,7 +351,7 @@ namespace OctoMap.Validation
 
             if (value is not string && value is not int && value is not bool && value is not decimal)
             {
-                issues.Add(CreateIssue(map, memberName, $"The {valueKind} type '{value.GetType().FullName}' is not supported in this phase."));
+                issues.Add(CreateIssue(map, memberName, $"The {valueKind} type '{value.GetType().FullName}' is not supported by the current OctoMap value emitter."));
             }
         }
 
@@ -363,6 +368,26 @@ namespace OctoMap.Validation
             if (!resolverContract.IsAssignableFrom(memberMap.ResolverType))
             {
                 issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"Resolver type '{memberMap.ResolverType.FullName}' must implement '{resolverContract.FullName}'."));
+            }
+        }
+
+        private static void ValidateConverter(ITypeMap map, MemberMap memberMap, List<OctoMapValidationIssue> issues)
+        {
+            if (memberMap.ConverterSourceExpression == null)
+            {
+                issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"Converter source expression is required for member '{memberMap.DestinationProperty.Name}'."));
+                return;
+            }
+
+            ValidateExpression(map, memberMap, memberMap.ConverterSourceExpression.Body, memberMap.ConverterSourceExpression.Parameters[0], issues);
+
+            var converterContract = typeof(IValueConverter<,>).MakeGenericType(
+                memberMap.ConverterSourceExpression.Body.Type,
+                memberMap.DestinationProperty.PropertyType);
+
+            if (!converterContract.IsAssignableFrom(memberMap.ConverterType))
+            {
+                issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"Converter type '{memberMap.ConverterType.FullName}' must implement '{converterContract.FullName}'."));
             }
         }
 

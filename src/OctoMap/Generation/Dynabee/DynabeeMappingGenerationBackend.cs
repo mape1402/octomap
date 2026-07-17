@@ -94,6 +94,7 @@ namespace OctoMap.Generation.Dynabee
                 .Select((_, index) => body.Parameter(GetSourceParameterName(plan, index)))
                 .ToArray();
             var context = body.Parameter("context");
+
             var destination = body.DeclareLocal("destination", plan.DestinationType);
 
             if (plan.SourceTypes.Count == 1 && !plan.SourceType.IsValueType)
@@ -130,7 +131,11 @@ namespace OctoMap.Generation.Dynabee
             MemberAssignmentPlan assignment)
         {
             IBeeValueExpression value;
-            if (assignment.ResolverType != null)
+            if (assignment.ConverterType != null)
+            {
+                value = BuildConverterValue(body, sources, context, assignment);
+            }
+            else if (assignment.ResolverType != null)
             {
                 value = BuildResolverValue(body, sources, destination, context, assignment);
             }
@@ -182,6 +187,28 @@ namespace OctoMap.Generation.Dynabee
             return body.Call(resolver, resolveMethod, source, destination, context);
         }
 
+        private static IBeeValueExpression BuildConverterValue(
+            IBeeMethodBodyBuilder body,
+            IReadOnlyList<IBeeValueExpression> sources,
+            IBeeValueExpression context,
+            MemberAssignmentPlan assignment)
+        {
+            var sourceValue = BuildExpression(
+                body,
+                sources,
+                assignment.ConverterSourceExpression.Body,
+                assignment.ConverterSourceExpression.Parameters[0],
+                assignment.SourceIndex);
+            var services = body.Property(context, nameof(IMapContext.Services));
+            var converter = body.StaticCall(GetRequiredServiceMethod(assignment.ConverterType), services);
+            var converterContract = typeof(IValueConverter<,>).MakeGenericType(
+                sourceValue.Type,
+                assignment.DestinationProperty.PropertyType);
+            var convertMethod = converterContract.GetMethod(nameof(IValueConverter<object, object>.Convert));
+
+            return body.Call(converter, convertMethod, sourceValue, context);
+        }
+
         private static IBeeValueExpression BuildExpression(
             IBeeMethodBodyBuilder body,
             IReadOnlyList<IBeeValueExpression> sources,
@@ -209,7 +236,7 @@ namespace OctoMap.Generation.Dynabee
                 case MethodCallExpression call:
                     return BuildMethodCallExpression(sources, call, sourceParameter);
                 default:
-                    throw new NotSupportedException($"Expression node '{expression.NodeType}' is not supported by OctoMap Phase 2.");
+                    throw new NotSupportedException($"Expression node '{expression.NodeType}' is not supported by the current OctoMap expression generator.");
             }
         }
 
@@ -240,7 +267,7 @@ namespace OctoMap.Generation.Dynabee
                 return body.Field(BuildExpression(body, sources, expression.Expression, sourceParameter, sourceIndex), field.Name);
             }
 
-            throw new NotSupportedException($"Member '{expression.Member.Name}' is not supported by OctoMap Phase 2.");
+            throw new NotSupportedException($"Member '{expression.Member.Name}' is not supported by the current OctoMap expression generator.");
         }
 
         private static IBeeValueExpression BuildBinaryExpression(
@@ -265,7 +292,7 @@ namespace OctoMap.Generation.Dynabee
                         BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex),
                         BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex));
                 default:
-                    throw new NotSupportedException($"Binary expression '{expression.NodeType}' is not supported by OctoMap Phase 2.");
+                    throw new NotSupportedException($"Binary expression '{expression.NodeType}' is not supported by the current OctoMap expression generator.");
             }
         }
 
@@ -288,7 +315,7 @@ namespace OctoMap.Generation.Dynabee
                 }
             }
 
-            throw new NotSupportedException($"Method call '{expression.Method.Name}' is not supported by OctoMap Phase 3.");
+            throw new NotSupportedException($"Method call '{expression.Method.Name}' is not supported by the current OctoMap multi-source expression generator.");
         }
 
         private static IBeeValueExpression ApplyNullSubstitute(

@@ -2,10 +2,10 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace OctoMap.Tests
 {
-    public class Phase2InterfaceMapTests
+    public class InterfaceMapRegistrationTests
     {
         [Fact]
-        public void IMapFrom_Registers_Map_By_Convention()
+        public void IMapFrom_Registers_Source_To_Destination_Map()
         {
             var services = new ServiceCollection();
             services.AddOctoMap(typeof(CustomerFromDto).Assembly);
@@ -19,7 +19,7 @@ namespace OctoMap.Tests
         }
 
         [Fact]
-        public void IMapTo_Registers_Map_By_Convention()
+        public void IMapTo_Registers_Source_To_Destination_Map()
         {
             var services = new ServiceCollection();
             services.AddOctoMap(typeof(CustomerTo).Assembly);

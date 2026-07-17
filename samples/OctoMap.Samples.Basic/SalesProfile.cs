@@ -15,8 +15,10 @@ namespace OctoMap.Samples.Basic
                 .ForMember(x => x.InternalCode, x => x.Ignore());
 
             builder.CreateMap<Order, OrderDto>()
-                .ForMember(x => x.Status, x => x.UseValue("Created"))
-                .ForMember(x => x.Description, x => x.NullSubstitute("No description"));
+                .ForMember(x => x.Status, x => x.MapFrom(s => s.StatusCode))
+                .ForMember(x => x.Description, x => x.NullSubstitute("No description"))
+                .ForMember(x => x.StatusLabel, x => x.ResolveUsing<OrderStatusLabelResolver>())
+                .ForMember(x => x.TotalText, x => x.ConvertUsing<OrderTotalTextConverter>(s => s.Total));
 
             builder.CreateMultiMap<OrderSummaryDto>()
                 .From<Order>(map => map

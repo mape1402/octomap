@@ -16,6 +16,16 @@ namespace OctoMap.Samples.Basic.Models
         public string Status { get; set; }
 
         /// <summary>
+        /// Gets or sets the order status label.
+        /// </summary>
+        public string StatusLabel { get; set; }
+
+        /// <summary>
+        /// Gets or sets the formatted order total.
+        /// </summary>
+        public string TotalText { get; set; }
+
+        /// <summary>
         /// Gets or sets the order description.
         /// </summary>
         public string Description { get; set; }

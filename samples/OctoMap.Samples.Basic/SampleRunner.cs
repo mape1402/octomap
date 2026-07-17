@@ -45,10 +45,13 @@ namespace OctoMap.Samples.Basic
             var orderDto = _mapper.Map<Order, OrderDto>(new Order
             {
                 Id = 700,
-                Description = null
+                StatusCode = "NEW",
+                Description = null,
+                Total = 149.99m,
+                CurrencyCode = "USD"
             });
 
-            Console.WriteLine($"Value rules: {orderDto.Id} - {orderDto.Status} - {orderDto.Description}");
+            Console.WriteLine($"Resolver and value converter: {orderDto.Id} - {orderDto.Status} - {orderDto.Description} - {orderDto.StatusLabel} - {orderDto.TotalText}");
 
             var registeredByInterface = _mapper.Map<WarehouseItemDto>(new WarehouseItem
             {
@@ -61,7 +64,10 @@ namespace OctoMap.Samples.Basic
                 new Order
                 {
                     Id = 701,
-                    Description = "Priority order"
+                    StatusCode = "HOLD",
+                    Description = "Priority order",
+                    Total = 499.50m,
+                    CurrencyCode = "USD"
                 },
                 new Customer
                 {
