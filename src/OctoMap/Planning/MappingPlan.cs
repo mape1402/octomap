@@ -88,7 +88,7 @@ namespace OctoMap.Planning
             object constantValue,
             bool hasNullSubstitute,
             object nullSubstitute)
-            : this(destinationProperty, sourceProperty, sourceExpression, null, null, null, false, hasConstantValue, constantValue, hasNullSubstitute, nullSubstitute, 0)
+            : this(destinationProperty, sourceProperty, sourceExpression, null, null, null, false, CollectionShape.None, CollectionShape.None, null, null, hasConstantValue, constantValue, hasNullSubstitute, nullSubstitute, 0)
         {
         }
 
@@ -102,6 +102,10 @@ namespace OctoMap.Planning
         /// <param name="converterType">The converter type.</param>
         /// <param name="converterSourceExpression">The converter source expression.</param>
         /// <param name="useNestedMap">A value indicating whether the assignment uses a nested map.</param>
+        /// <param name="sourceCollectionShape">The source collection shape.</param>
+        /// <param name="destinationCollectionShape">The destination collection shape.</param>
+        /// <param name="sourceElementType">The source element type.</param>
+        /// <param name="destinationElementType">The destination element type.</param>
         /// <param name="hasConstantValue">A value indicating whether this assignment uses a constant value.</param>
         /// <param name="constantValue">The constant value.</param>
         /// <param name="hasNullSubstitute">A value indicating whether this assignment has a null substitute.</param>
@@ -115,6 +119,10 @@ namespace OctoMap.Planning
             Type converterType,
             LambdaExpression converterSourceExpression,
             bool useNestedMap,
+            CollectionShape sourceCollectionShape,
+            CollectionShape destinationCollectionShape,
+            Type sourceElementType,
+            Type destinationElementType,
             bool hasConstantValue,
             object constantValue,
             bool hasNullSubstitute,
@@ -128,6 +136,10 @@ namespace OctoMap.Planning
             ConverterType = converterType;
             ConverterSourceExpression = converterSourceExpression;
             UseNestedMap = useNestedMap;
+            SourceCollectionShape = sourceCollectionShape;
+            DestinationCollectionShape = destinationCollectionShape;
+            SourceElementType = sourceElementType;
+            DestinationElementType = destinationElementType;
             HasConstantValue = hasConstantValue;
             ConstantValue = constantValue;
             HasNullSubstitute = hasNullSubstitute;
@@ -164,6 +176,31 @@ namespace OctoMap.Planning
         /// Gets whether the assignment uses a nested map.
         /// </summary>
         public bool UseNestedMap { get; }
+
+        /// <summary>
+        /// Gets the source collection shape.
+        /// </summary>
+        public CollectionShape SourceCollectionShape { get; }
+
+        /// <summary>
+        /// Gets the destination collection shape.
+        /// </summary>
+        public CollectionShape DestinationCollectionShape { get; }
+
+        /// <summary>
+        /// Gets the source collection element type.
+        /// </summary>
+        public Type SourceElementType { get; }
+
+        /// <summary>
+        /// Gets the destination collection element type.
+        /// </summary>
+        public Type DestinationElementType { get; }
+
+        /// <summary>
+        /// Gets whether the assignment uses collection mapping.
+        /// </summary>
+        public bool UseCollectionMap => SourceCollectionShape != CollectionShape.None && DestinationCollectionShape != CollectionShape.None;
 
         /// <summary>
         /// Gets whether this assignment uses a constant value.

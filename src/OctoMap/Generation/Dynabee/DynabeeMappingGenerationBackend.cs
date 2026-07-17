@@ -147,6 +147,10 @@ namespace OctoMap.Generation.Dynabee
             {
                 value = BuildExpression(body, sources, assignment.SourceExpression.Body, assignment.SourceExpression.Parameters[0], assignment.SourceIndex);
             }
+            else if (assignment.UseCollectionMap)
+            {
+                value = BuildCollectionMapValue(body, sources, context, assignment);
+            }
             else if (assignment.UseNestedMap)
             {
                 value = BuildNestedMapValue(body, sources, context, assignment);
@@ -211,6 +215,100 @@ namespace OctoMap.Generation.Dynabee
             var convertMethod = converterContract.GetMethod(nameof(IValueConverter<object, object>.Convert));
 
             return body.Call(converter, convertMethod, sourceValue, context);
+        }
+
+        private static IBeeValueExpression BuildCollectionMapValue(
+            IBeeMethodBodyBuilder body,
+            IReadOnlyList<IBeeValueExpression> sources,
+            IBeeValueExpression context,
+            MemberAssignmentPlan assignment)
+        {
+            var source = sources[assignment.SourceIndex];
+            var sourceCollection = body.Property(source, assignment.SourceProperty.Name);
+            var destinationCollection = body.DeclareLocal($"collection_{assignment.DestinationProperty.Name}", assignment.DestinationProperty.PropertyType);
+
+            body.If(
+                body.IsNull(sourceCollection),
+                whenTrue => whenTrue.Assign(destinationCollection, body.Default(assignment.DestinationProperty.PropertyType)),
+                whenFalse =>
+                {
+                    var count = BuildCollectionCountValue(whenFalse, sourceCollection, assignment.SourceCollectionShape);
+                    whenFalse.Assign(destinationCollection, CreateDestinationCollection(whenFalse, assignment, count));
+
+                    var index = whenFalse.DeclareLocal($"index_{assignment.DestinationProperty.Name}", typeof(int));
+                    whenFalse.For(
+                        initialize: loop => loop.Assign(index, loop.Constant(0)),
+                        condition: loop => loop.LessThan(index, BuildCollectionCountValue(loop, sourceCollection, assignment.SourceCollectionShape)),
+                        increment: loop => loop.Assign(index, loop.Add(index, loop.Constant(1))),
+                        body: loop =>
+                        {
+                            var sourceItem = loop.Index(sourceCollection, index);
+                            var destinationItem = BuildCollectionItemValue(loop, sourceItem, context, assignment);
+                            AssignCollectionItem(loop, destinationCollection, index, destinationItem, assignment);
+                        });
+                });
+
+            return destinationCollection;
+        }
+
+        private static IBeeValueExpression BuildCollectionCountValue(
+            IBeeMethodBodyBuilder body,
+            IBeeValueExpression collection,
+            CollectionShape shape)
+            => shape == CollectionShape.Array
+                ? body.Property(collection, nameof(Array.Length))
+                : body.Property(collection, nameof(List<object>.Count));
+
+        private static IBeeValueExpression CreateDestinationCollection(
+            IBeeMethodBodyBuilder body,
+            MemberAssignmentPlan assignment,
+            IBeeValueExpression count)
+            => assignment.DestinationCollectionShape == CollectionShape.Array
+                ? body.NewArray(assignment.DestinationElementType, count)
+                : body.New(assignment.DestinationProperty.PropertyType, count);
+
+        private static IBeeValueExpression BuildCollectionItemValue(
+            IBeeMethodBodyBuilder body,
+            IBeeValueExpression sourceItem,
+            IBeeValueExpression context,
+            MemberAssignmentPlan assignment)
+        {
+            if (assignment.DestinationElementType.IsAssignableFrom(assignment.SourceElementType))
+            {
+                return sourceItem.Type == assignment.DestinationElementType
+                    ? sourceItem
+                    : body.Convert(sourceItem, assignment.DestinationElementType);
+            }
+
+            var services = body.Property(context, nameof(IMapContext.Services));
+            var mapper = body.StaticCall(GetRequiredServiceMethod(typeof(IOctoMapper)), services);
+            var mapMethod = typeof(IOctoMapper)
+                .GetMethods()
+                .Single(x => x.Name == nameof(IOctoMapper.Map)
+                    && x.IsGenericMethodDefinition
+                    && x.GetGenericArguments().Length == 2)
+                .MakeGenericMethod(assignment.SourceElementType, assignment.DestinationElementType);
+
+            return body.Call(mapper, mapMethod, sourceItem);
+        }
+
+        private static void AssignCollectionItem(
+            IBeeMethodBodyBuilder body,
+            IBeeValueExpression destinationCollection,
+            IBeeValueExpression index,
+            IBeeValueExpression destinationItem,
+            MemberAssignmentPlan assignment)
+        {
+            if (assignment.DestinationCollectionShape == CollectionShape.Array)
+            {
+                body.Assign(body.Index(destinationCollection, index), destinationItem);
+                return;
+            }
+
+            var addMethod = assignment.DestinationProperty.PropertyType.GetMethod(
+                nameof(List<object>.Add),
+                new[] { assignment.DestinationElementType });
+            body.Evaluate(body.Call(destinationCollection, addMethod, destinationItem));
         }
 
         private static IBeeValueExpression BuildNestedMapValue(

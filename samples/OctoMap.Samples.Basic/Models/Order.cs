@@ -34,5 +34,10 @@ namespace OctoMap.Samples.Basic.Models
         /// Gets or sets the order customer.
         /// </summary>
         public Customer Customer { get; set; }
+
+        /// <summary>
+        /// Gets or sets the order items.
+        /// </summary>
+        public List<OrderItem> Items { get; set; }
     }
 }

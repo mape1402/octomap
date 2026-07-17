@@ -14,6 +14,9 @@ namespace OctoMap.Samples.Basic
                 .ForMember(x => x.FullName, x => x.MapFrom(s => s.FirstName + " " + s.LastName))
                 .ForMember(x => x.InternalCode, x => x.Ignore());
 
+            builder.CreateMap<OrderItem, OrderItemDto>()
+                .ForMember(x => x.Label, x => x.MapFrom(s => s.Sku + " x " + s.Quantity));
+
             builder.CreateMap<Order, OrderDto>()
                 .ForMember(x => x.Status, x => x.MapFrom(s => s.StatusCode))
                 .ForMember(x => x.Description, x => x.NullSubstitute("No description"))

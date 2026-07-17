@@ -55,10 +55,15 @@ namespace OctoMap.Samples.Basic
                     FirstName = "Katherine",
                     LastName = "Johnson",
                     InternalCode = "nested-secret"
+                },
+                Items = new List<OrderItem>
+                {
+                    new() { Sku = "OCTO-MUG", Quantity = 2 },
+                    new() { Sku = "OCTO-STICKER", Quantity = 5 }
                 }
             });
 
-            Console.WriteLine($"Resolver, value converter, nested map: {orderDto.Id} - {orderDto.Status} - {orderDto.Description} - {orderDto.StatusLabel} - {orderDto.TotalText} - {orderDto.Customer.FullName}");
+            Console.WriteLine($"Resolver, value converter, nested map, collection map: {orderDto.Id} - {orderDto.Status} - {orderDto.Description} - {orderDto.StatusLabel} - {orderDto.TotalText} - {orderDto.Customer.FullName} - {orderDto.Items.Count} items");
 
             var registeredByInterface = _mapper.Map<WarehouseItemDto>(new WarehouseItem
             {

@@ -77,6 +77,12 @@ namespace OctoMap.Planning
                     continue;
                 }
 
+                if (TryCreateCollectionAssignment(destinationProperty, sourceProperty, out var collectionAssignment))
+                {
+                    assignments.Add(collectionAssignment);
+                    continue;
+                }
+
                 if (!destinationProperty.PropertyType.IsAssignableFrom(sourceProperty.PropertyType))
                 {
                     if (CanUseNestedMap(sourceProperty.PropertyType, destinationProperty.PropertyType))
@@ -89,6 +95,10 @@ namespace OctoMap.Planning
                             null,
                             null,
                             true,
+                            CollectionShape.None,
+                            CollectionShape.None,
+                            null,
+                            null,
                             false,
                             null,
                             false,
@@ -121,6 +131,10 @@ namespace OctoMap.Planning
                 memberMap?.ConverterType,
                 memberMap?.ConverterSourceExpression,
                 false,
+                CollectionShape.None,
+                CollectionShape.None,
+                null,
+                null,
                 memberMap?.HasConstantValue == true,
                 memberMap?.ConstantValue,
                 memberMap?.HasNullSubstitute == true,
@@ -167,6 +181,10 @@ namespace OctoMap.Planning
                     null,
                     null,
                     false,
+                    CollectionShape.None,
+                    CollectionShape.None,
+                    null,
+                    null,
                     false,
                     null,
                     false,
@@ -191,6 +209,10 @@ namespace OctoMap.Planning
                 converterType: memberMap?.ConverterType,
                 converterSourceExpression: memberMap?.ConverterSourceExpression,
                 useNestedMap: false,
+                sourceCollectionShape: CollectionShape.None,
+                destinationCollectionShape: CollectionShape.None,
+                sourceElementType: null,
+                destinationElementType: null,
                 memberMap?.HasConstantValue == true,
                 memberMap?.ConstantValue,
                 memberMap?.HasNullSubstitute == true,
@@ -234,6 +256,59 @@ namespace OctoMap.Planning
             }
 
             return true;
+        }
+
+        private static bool TryCreateCollectionAssignment(
+            PropertyInfo destinationProperty,
+            PropertyInfo sourceProperty,
+            out MemberAssignmentPlan assignment)
+        {
+            assignment = null;
+            if (!TryGetCollectionShape(sourceProperty.PropertyType, out var sourceShape, out var sourceElementType)
+                || !TryGetCollectionShape(destinationProperty.PropertyType, out var destinationShape, out var destinationElementType))
+            {
+                return false;
+            }
+
+            assignment = new MemberAssignmentPlan(
+                destinationProperty,
+                sourceProperty,
+                null,
+                null,
+                null,
+                null,
+                false,
+                sourceShape,
+                destinationShape,
+                sourceElementType,
+                destinationElementType,
+                false,
+                null,
+                false,
+                null,
+                0);
+            return true;
+        }
+
+        private static bool TryGetCollectionShape(Type type, out CollectionShape shape, out Type elementType)
+        {
+            if (type.IsArray && type.GetArrayRank() == 1)
+            {
+                shape = CollectionShape.Array;
+                elementType = type.GetElementType();
+                return true;
+            }
+
+            if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(List<>))
+            {
+                shape = CollectionShape.List;
+                elementType = type.GetGenericArguments()[0];
+                return true;
+            }
+
+            shape = CollectionShape.None;
+            elementType = null;
+            return false;
         }
     }
 }
