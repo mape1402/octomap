@@ -22,6 +22,18 @@ namespace OctoMap.Configuration
         }
 
         /// <inheritdoc/>
+        public IMapExpression<TSource, TDestination> ConstructUsing(Expression<Func<TSource, TDestination>> constructionExpression)
+        {
+            if (constructionExpression == null)
+            {
+                throw new ArgumentNullException(nameof(constructionExpression));
+            }
+
+            _typeMap.ConstructionExpression = constructionExpression;
+            return this;
+        }
+
+        /// <inheritdoc/>
         public IMapExpression<TSource, TDestination> ForMember<TMember>(
             Expression<Func<TDestination, TMember>> destinationMember,
             Action<IMemberMapExpression<TSource, TDestination, TMember>> configure)

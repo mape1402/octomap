@@ -256,6 +256,25 @@ public sealed class ProductDto
 
 Runtime implicit maps are single-source only. Multi-source maps must be configured explicitly.
 
+## Constructor Mapping
+
+OctoMap can create destinations through constructors. If a destination does not expose a public parameterless constructor, OctoMap tries to match public constructor parameters to readable source properties by name.
+
+```csharp
+public sealed record CustomerDto(int Id, string Name);
+
+builder.CreateMap<Customer, CustomerDto>();
+```
+
+You can also configure construction explicitly.
+
+```csharp
+builder.CreateMap<Customer, CustomerDto>()
+    .ConstructUsing(s => new CustomerDto(s.Id, s.FirstName.Trim() + " " + s.LastName.Trim()));
+```
+
+After construction, OctoMap still applies configured and convention member assignments for public settable destination properties that were not already supplied through the constructor.
+
 ## Nested Object Mapping
 
 OctoMap can map nested object members by convention when the source and destination property names match and the member types are mappable.

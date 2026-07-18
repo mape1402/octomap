@@ -28,10 +28,10 @@ namespace OctoMap.Validation
 
         private static void ValidateMap(ITypeMap map, List<OctoMapValidationIssue> issues)
         {
-            ValidateDestinationCreation(map, issues);
-
             if (map is not TypeMap typeMap)
             {
+                ValidateDestinationCreation(map, issues);
+
                 if (map is MultiSourceTypeMap multiSourceTypeMap)
                 {
                     ValidateMultiSourceMap(multiSourceTypeMap, issues);
@@ -39,6 +39,9 @@ namespace OctoMap.Validation
 
                 return;
             }
+
+            ValidateDestinationCreation(typeMap, issues);
+            ValidateConstructionExpression(typeMap, issues);
 
             foreach (var memberMap in typeMap.MemberMaps.Values)
             {
@@ -59,9 +62,38 @@ namespace OctoMap.Validation
                 return;
             }
 
+            if (map is TypeMap typeMap && typeMap.ConstructionExpression != null)
+            {
+                return;
+            }
+
+            if (map.DestinationType.GetConstructor(Type.EmptyTypes) != null)
+            {
+                return;
+            }
+
+            if (map is TypeMap singleSourceTypeMap && CanResolveConventionConstructor(singleSourceTypeMap))
+            {
+                return;
+            }
+
             if (map.DestinationType.GetConstructor(Type.EmptyTypes) == null)
             {
-                issues.Add(CreateIssue(map, null, $"Destination type '{map.DestinationType.FullName}' must have a public parameterless constructor."));
+                issues.Add(CreateIssue(map, null, $"Destination type '{map.DestinationType.FullName}' must have a public parameterless constructor or constructor parameters that match readable source properties."));
+            }
+        }
+
+        private static void ValidateConstructionExpression(TypeMap map, List<OctoMapValidationIssue> issues)
+        {
+            if (map.ConstructionExpression == null)
+            {
+                return;
+            }
+
+            ValidateExpression(map, null, map.ConstructionExpression.Body, map.ConstructionExpression.Parameters[0], issues);
+            if (!map.DestinationType.IsAssignableFrom(map.ConstructionExpression.Body.Type))
+            {
+                issues.Add(CreateIssue(map, null, $"ConstructUsing expression result type '{map.ConstructionExpression.Body.Type.FullName}' cannot be assigned to destination type '{map.DestinationType.FullName}'."));
             }
         }
 
@@ -132,17 +164,17 @@ namespace OctoMap.Validation
                         return;
                     }
 
-                    issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"Member '{member.Member.Name}' is not supported in MapFrom expressions."));
+                    issues.Add(CreateIssue(map, GetMemberName(memberMap), $"Member '{member.Member.Name}' is not supported in MapFrom expressions."));
                     return;
                 case ConstantExpression constant:
-                    ValidateValue(map, memberMap.DestinationProperty.Name, constant.Value, constant.Type, "constant expression", issues);
+                    ValidateValue(map, GetMemberName(memberMap), constant.Value, constant.Type, "constant expression", issues);
                     return;
                 case BinaryExpression binary:
                     ValidateExpression(map, memberMap, binary.Left, sourceParameter, issues);
                     ValidateExpression(map, memberMap, binary.Right, sourceParameter, issues);
                     if (!IsSupportedBinaryExpression(binary.NodeType))
                     {
-                        issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"Binary expression '{binary.NodeType}' is not supported in MapFrom expressions."));
+                        issues.Add(CreateIssue(map, GetMemberName(memberMap), $"Binary expression '{binary.NodeType}' is not supported in MapFrom expressions."));
                     }
 
                     return;
@@ -157,11 +189,21 @@ namespace OctoMap.Validation
                     ValidateExpression(map, memberMap, conditional.IfTrue, sourceParameter, issues);
                     ValidateExpression(map, memberMap, conditional.IfFalse, sourceParameter, issues);
                     return;
+                case NewExpression @new:
+                    foreach (var argument in @new.Arguments)
+                    {
+                        ValidateExpression(map, memberMap, argument, sourceParameter, issues);
+                    }
+
+                    return;
                 default:
-                    issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"Expression node '{expression.NodeType}' is not supported in MapFrom expressions."));
+                    issues.Add(CreateIssue(map, GetMemberName(memberMap), $"Expression node '{expression.NodeType}' is not supported in MapFrom expressions."));
                     return;
             }
         }
+
+        private static string GetMemberName(MemberMap memberMap)
+            => memberMap?.DestinationProperty.Name;
 
         private static void ValidateMultiSourceMap(MultiSourceTypeMap map, List<OctoMapValidationIssue> issues)
         {
@@ -333,6 +375,25 @@ namespace OctoMap.Validation
             => ReferenceEquals(expression.Object, sourceParameter)
                 && expression.Method.IsGenericMethod
                 && expression.Method.GetGenericMethodDefinition() == typeof(IMultiSourceMapContext).GetMethod(nameof(IMultiSourceMapContext.Get));
+
+        private static bool CanResolveConventionConstructor(TypeMap map)
+        {
+            var sourceProperties = map.SourceType
+                .GetProperties(BindingFlags.Instance | BindingFlags.Public)
+                .Where(x => x.CanRead && x.GetMethod != null)
+                .ToDictionary(x => x.Name, StringComparer.OrdinalIgnoreCase);
+
+            return map.DestinationType
+                .GetConstructors(BindingFlags.Instance | BindingFlags.Public)
+                .Any(constructor =>
+                {
+                    var parameters = constructor.GetParameters();
+                    return parameters.Length > 0
+                        && parameters.All(parameter =>
+                            sourceProperties.TryGetValue(parameter.Name, out var sourceProperty)
+                            && parameter.ParameterType.IsAssignableFrom(sourceProperty.PropertyType));
+                });
+        }
 
         private static bool IsSupportedBinaryExpression(ExpressionType nodeType)
             => nodeType == ExpressionType.Add

@@ -10,6 +10,13 @@ namespace OctoMap
     public interface IMapExpression<TSource, TDestination>
     {
         /// <summary>
+        /// Configures how the destination object is constructed.
+        /// </summary>
+        /// <param name="constructionExpression">The destination construction expression.</param>
+        /// <returns>The current map expression.</returns>
+        IMapExpression<TSource, TDestination> ConstructUsing(Expression<Func<TSource, TDestination>> constructionExpression);
+
+        /// <summary>
         /// Configures a destination member.
         /// </summary>
         /// <typeparam name="TMember">The destination member type.</typeparam>

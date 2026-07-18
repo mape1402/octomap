@@ -14,8 +14,9 @@ namespace OctoMap.Planning
         /// <param name="sourceType">The source type.</param>
         /// <param name="destinationType">The destination type.</param>
         /// <param name="assignments">The member assignment plans.</param>
-        public MappingPlan(Type sourceType, Type destinationType, IReadOnlyList<MemberAssignmentPlan> assignments)
-            : this(new[] { sourceType }, destinationType, assignments)
+        /// <param name="construction">The destination construction plan.</param>
+        public MappingPlan(Type sourceType, Type destinationType, IReadOnlyList<MemberAssignmentPlan> assignments, DestinationConstructionPlan construction = null)
+            : this(new[] { sourceType }, destinationType, assignments, construction)
         {
         }
 
@@ -25,7 +26,8 @@ namespace OctoMap.Planning
         /// <param name="sourceTypes">The source types.</param>
         /// <param name="destinationType">The destination type.</param>
         /// <param name="assignments">The member assignment plans.</param>
-        public MappingPlan(IReadOnlyList<Type> sourceTypes, Type destinationType, IReadOnlyList<MemberAssignmentPlan> assignments)
+        /// <param name="construction">The destination construction plan.</param>
+        public MappingPlan(IReadOnlyList<Type> sourceTypes, Type destinationType, IReadOnlyList<MemberAssignmentPlan> assignments, DestinationConstructionPlan construction = null)
         {
             if (sourceTypes == null)
             {
@@ -41,6 +43,7 @@ namespace OctoMap.Planning
             SourceType = SourceTypes[0];
             DestinationType = destinationType ?? throw new ArgumentNullException(nameof(destinationType));
             Assignments = assignments ?? throw new ArgumentNullException(nameof(assignments));
+            Construction = construction;
         }
 
         /// <summary>
@@ -62,6 +65,11 @@ namespace OctoMap.Planning
         /// Gets the member assignment plans.
         /// </summary>
         public IReadOnlyList<MemberAssignmentPlan> Assignments { get; }
+
+        /// <summary>
+        /// Gets the destination construction plan.
+        /// </summary>
+        public DestinationConstructionPlan Construction { get; }
 
     }
 

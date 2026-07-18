@@ -34,6 +34,9 @@ namespace OctoMap.Samples.Basic
             var customerDto = _mapper.Map<Customer, CustomerDto>(customer);
             Console.WriteLine($"Configured map: {customerDto.Id} - {customerDto.FullName} - internal '{customerDto.InternalCode ?? "ignored"}'");
 
+            var customerRecordDto = _mapper.Map<Customer, CustomerRecordDto>(customer);
+            Console.WriteLine($"Constructor map: {customerRecordDto.Id} - {customerRecordDto.FullName}");
+
             var productDto = _mapper.Map<ProductDto>(new Product
             {
                 Sku = "OCTO-001",

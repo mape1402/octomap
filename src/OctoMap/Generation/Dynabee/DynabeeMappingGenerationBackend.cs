@@ -104,7 +104,7 @@ namespace OctoMap.Generation.Dynabee
                     whenTrue => whenTrue.Return(body.Default(plan.DestinationType)));
             }
 
-            body.Assign(destination, CreateDestination(body, plan.DestinationType));
+            body.Assign(destination, CreateDestination(body, sources, plan));
 
             foreach (var assignment in plan.Assignments)
             {
@@ -116,11 +116,40 @@ namespace OctoMap.Generation.Dynabee
             body.Return(destination);
         }
 
-        private static IBeeValueExpression CreateDestination(IBeeMethodBodyBuilder body, Type destinationType)
+        private static IBeeValueExpression CreateDestination(
+            IBeeMethodBodyBuilder body,
+            IReadOnlyList<IBeeValueExpression> sources,
+            MappingPlan plan)
         {
-            return destinationType.IsValueType
-                ? body.Default(destinationType)
-                : body.New(destinationType);
+            if (plan.Construction?.ConstructionExpression != null)
+            {
+                return BuildExpression(
+                    body,
+                    sources,
+                    plan.Construction.ConstructionExpression.Body,
+                    plan.Construction.ConstructionExpression.Parameters[0],
+                    0);
+            }
+
+            if (plan.Construction?.Constructor != null)
+            {
+                var source = sources[0];
+                var arguments = plan.Construction.Parameters
+                    .Select(parameter =>
+                    {
+                        var value = body.Property(source, parameter.SourceProperty.Name);
+                        return value.Type == parameter.Parameter.ParameterType
+                            ? value
+                            : body.Convert(value, parameter.Parameter.ParameterType);
+                    })
+                    .ToArray();
+
+                return body.New(plan.DestinationType, arguments);
+            }
+
+            return plan.DestinationType.IsValueType
+                ? body.Default(plan.DestinationType)
+                : body.New(plan.DestinationType);
         }
 
         private static IBeeValueExpression BuildAssignmentValue(
@@ -417,10 +446,24 @@ namespace OctoMap.Generation.Dynabee
                         BuildExpression(body, sources, conditional.IfFalse, sourceParameter, sourceIndex));
                 case MethodCallExpression call:
                     return BuildMethodCallExpression(body, sources, call, sourceParameter, sourceIndex);
+                case NewExpression @new:
+                    return BuildNewExpression(body, sources, @new, sourceParameter, sourceIndex);
                 default:
                     throw new NotSupportedException($"Expression node '{expression.NodeType}' is not supported by the current OctoMap expression generator.");
             }
         }
+
+        private static IBeeValueExpression BuildNewExpression(
+            IBeeMethodBodyBuilder body,
+            IReadOnlyList<IBeeValueExpression> sources,
+            NewExpression expression,
+            ParameterExpression sourceParameter,
+            int sourceIndex)
+            => body.New(
+                expression.Type,
+                expression.Arguments
+                    .Select(argument => BuildExpression(body, sources, argument, sourceParameter, sourceIndex))
+                    .ToArray());
 
         private static IBeeValueExpression BuildMemberExpression(
             IBeeMethodBodyBuilder body,

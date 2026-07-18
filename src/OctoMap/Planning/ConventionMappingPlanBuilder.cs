@@ -41,11 +41,19 @@ namespace OctoMap.Planning
                 ? configuredTypeMap.MemberMaps
                 : new Dictionary<string, MemberMap>(StringComparer.OrdinalIgnoreCase);
 
-            EnsureDestinationCanBeCreated(typeMap.DestinationType);
+            var configuredConstructionExpression = typeMap is TypeMap configuredConstructionTypeMap
+                ? configuredConstructionTypeMap.ConstructionExpression
+                : null;
+            var construction = CreateConstructionPlan(typeMap.SourceType, typeMap.DestinationType, sourceProperties, configuredConstructionExpression);
 
             var assignments = new List<MemberAssignmentPlan>();
             foreach (var destinationProperty in typeMap.DestinationType.GetProperties(BindingFlags.Instance | BindingFlags.Public))
             {
+                if (construction?.ConstructedMemberNames.Contains(destinationProperty.Name) == true)
+                {
+                    continue;
+                }
+
                 if (!CanWrite(destinationProperty))
                 {
                     continue;
@@ -125,7 +133,7 @@ namespace OctoMap.Planning
                 assignments.Add(CreateAssignment(destinationProperty, sourceProperty, null, memberMap));
             }
 
-            return new MappingPlan(typeMap.SourceType, typeMap.DestinationType, assignments);
+            return new MappingPlan(typeMap.SourceType, typeMap.DestinationType, assignments, construction);
         }
 
         private static bool CanWrite(PropertyInfo property)
@@ -210,6 +218,37 @@ namespace OctoMap.Planning
             return new MappingPlan(typeMap.SourceTypes, typeMap.DestinationType, assignments);
         }
 
+        private static DestinationConstructionPlan CreateConstructionPlan(
+            Type sourceType,
+            Type destinationType,
+            IReadOnlyDictionary<string, PropertyInfo> sourceProperties,
+            System.Linq.Expressions.LambdaExpression constructionExpression)
+        {
+            EnsureDestinationCanBeCreated(sourceType, destinationType, sourceProperties, constructionExpression);
+
+            if (constructionExpression != null)
+            {
+                var constructedMemberNames = GetConstructedMemberNames(constructionExpression);
+                return new DestinationConstructionPlan(constructionExpression, null, null, constructedMemberNames);
+            }
+
+            if (destinationType.IsValueType || destinationType.GetConstructor(Type.EmptyTypes) != null)
+            {
+                return null;
+            }
+
+            if (!TrySelectConventionConstructor(destinationType, sourceProperties, out var constructor, out var parameterPlans))
+            {
+                return null;
+            }
+
+            return new DestinationConstructionPlan(
+                null,
+                constructor,
+                parameterPlans,
+                new HashSet<string>(parameterPlans.Select(x => x.Parameter.Name), StringComparer.OrdinalIgnoreCase));
+        }
+
         private static MemberAssignmentPlan CreateAssignment(
             PropertyInfo destinationProperty,
             PropertyInfo sourceProperty,
@@ -251,6 +290,88 @@ namespace OctoMap.Planning
             {
                 throw new InvalidOperationException($"Destination type '{destinationType.FullName}' must have a public parameterless constructor.");
             }
+        }
+
+        private static void EnsureDestinationCanBeCreated(
+            Type sourceType,
+            Type destinationType,
+            IReadOnlyDictionary<string, PropertyInfo> sourceProperties,
+            System.Linq.Expressions.LambdaExpression constructionExpression)
+        {
+            if (destinationType.IsAbstract || destinationType.IsInterface)
+            {
+                throw new InvalidOperationException($"Destination type '{destinationType.FullName}' cannot be created.");
+            }
+
+            if (destinationType.IsValueType || constructionExpression != null || destinationType.GetConstructor(Type.EmptyTypes) != null)
+            {
+                return;
+            }
+
+            if (!TrySelectConventionConstructor(destinationType, sourceProperties, out _, out _))
+            {
+                throw new InvalidOperationException($"Destination type '{destinationType.FullName}' must have a public parameterless constructor or constructor parameters that match readable source properties on '{sourceType.FullName}'.");
+            }
+        }
+
+        private static bool TrySelectConventionConstructor(
+            Type destinationType,
+            IReadOnlyDictionary<string, PropertyInfo> sourceProperties,
+            out ConstructorInfo constructor,
+            out IReadOnlyList<ConstructorParameterPlan> parameterPlans)
+        {
+            foreach (var candidate in destinationType
+                .GetConstructors(BindingFlags.Instance | BindingFlags.Public)
+                .OrderByDescending(x => x.GetParameters().Length))
+            {
+                var parameters = candidate.GetParameters();
+                if (parameters.Length == 0)
+                {
+                    continue;
+                }
+
+                var plans = new List<ConstructorParameterPlan>();
+                var canUseConstructor = true;
+                foreach (var parameter in parameters)
+                {
+                    if (!sourceProperties.TryGetValue(parameter.Name, out var sourceProperty)
+                        || !parameter.ParameterType.IsAssignableFrom(sourceProperty.PropertyType))
+                    {
+                        canUseConstructor = false;
+                        break;
+                    }
+
+                    plans.Add(new ConstructorParameterPlan(parameter, sourceProperty));
+                }
+
+                if (canUseConstructor)
+                {
+                    constructor = candidate;
+                    parameterPlans = plans;
+                    return true;
+                }
+            }
+
+            constructor = null;
+            parameterPlans = null;
+            return false;
+        }
+
+        private static IReadOnlySet<string> GetConstructedMemberNames(System.Linq.Expressions.LambdaExpression constructionExpression)
+        {
+            if (constructionExpression.Body is not System.Linq.Expressions.NewExpression newExpression)
+            {
+                return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            }
+
+            if (newExpression.Members == null)
+            {
+                return new HashSet<string>(
+                    newExpression.Constructor.GetParameters().Select(x => x.Name),
+                    StringComparer.OrdinalIgnoreCase);
+            }
+
+            return new HashSet<string>(newExpression.Members.Select(x => x.Name), StringComparer.OrdinalIgnoreCase);
         }
 
         private static bool CanUseNestedMap(Type sourceType, Type destinationType)

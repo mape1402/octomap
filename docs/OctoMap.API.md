@@ -42,7 +42,7 @@ IMapExpression<TSource, TDestination> CreateMap<TSource, TDestination>();
 void CreateMap(Type sourceType, Type destinationType);
 ```
 
-Single-source maps support explicit member rules and convention matching by destination/source property name.
+Single-source maps support explicit member rules, destination construction rules, and convention matching by destination/source property name.
 
 ```csharp
 builder.CreateMap<Customer, CustomerDto>()
@@ -60,6 +60,28 @@ void ResolveUsing<TResolver>()
 void UseValue(TMember value);
 void NullSubstitute(TMember value);
 ```
+
+### Destination Construction
+
+Destinations with public parameterless constructors are created by convention. If a destination does not expose a public parameterless constructor, OctoMap can match public constructor parameters to readable source properties by name.
+
+```csharp
+public sealed record CustomerDto(int Id, string Name);
+
+builder.CreateMap<Customer, CustomerDto>();
+```
+
+Construction can also be configured explicitly.
+
+```csharp
+IMapExpression<TSource, TDestination> ConstructUsing(
+    Expression<Func<TSource, TDestination>> constructionExpression);
+
+builder.CreateMap<Customer, CustomerDto>()
+    .ConstructUsing(s => new CustomerDto(s.Id, s.FirstName + " " + s.LastName));
+```
+
+After construction, OctoMap still applies settable destination member assignments that were not already supplied through the constructor.
 
 `ResolveUsing<TResolver>()` resolves `TResolver` from `IMapContext.Services` on each map call and invokes:
 

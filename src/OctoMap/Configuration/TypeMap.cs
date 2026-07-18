@@ -1,5 +1,7 @@
 namespace OctoMap.Configuration
 {
+    using System.Linq.Expressions;
+
     /// <summary>
     /// Represents an immutable configured type map.
     /// </summary>
@@ -33,6 +35,11 @@ namespace OctoMap.Configuration
         /// Gets the explicitly configured member maps.
         /// </summary>
         public IReadOnlyDictionary<string, MemberMap> MemberMaps => _memberMaps;
+
+        /// <summary>
+        /// Gets or sets the configured destination construction expression.
+        /// </summary>
+        public LambdaExpression ConstructionExpression { get; set; }
 
         /// <summary>
         /// Gets or creates explicit configuration for a destination member.
