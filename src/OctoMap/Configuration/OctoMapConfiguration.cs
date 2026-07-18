@@ -40,7 +40,17 @@ namespace OctoMap.Configuration
         public ITypeMap FindMap(Type sourceType, Type destinationType)
         {
             var key = new MapKey(sourceType, destinationType);
-            return _maps.TryGetValue(key, out var map) ? map : null;
+            if (_maps.TryGetValue(key, out var map))
+            {
+                return map;
+            }
+
+            return _maps.Values
+                .Where(x => x.SourceType.IsAssignableFrom(sourceType)
+                    && destinationType.IsAssignableFrom(x.DestinationType))
+                .OrderBy(x => GetInheritanceDistance(sourceType, x.SourceType))
+                .ThenBy(x => GetInheritanceDistance(x.DestinationType, destinationType))
+                .FirstOrDefault();
         }
 
         /// <inheritdoc/>
@@ -113,6 +123,34 @@ namespace OctoMap.Configuration
             {
                 throw new OctoMapValidationException(report);
             }
+        }
+
+        private static int GetInheritanceDistance(Type type, Type candidateBaseType)
+        {
+            if (type == candidateBaseType)
+            {
+                return 0;
+            }
+
+            if (candidateBaseType.IsInterface)
+            {
+                return type.GetInterfaces().Contains(candidateBaseType) ? 1 : int.MaxValue;
+            }
+
+            var distance = 0;
+            var current = type;
+            while (current != null)
+            {
+                if (current == candidateBaseType)
+                {
+                    return distance;
+                }
+
+                distance++;
+                current = current.BaseType;
+            }
+
+            return int.MaxValue;
         }
     }
 }

@@ -85,6 +85,16 @@ namespace OctoMap.Configuration
         }
 
         /// <summary>
+        /// Attempts to get a configured type map.
+        /// </summary>
+        /// <param name="sourceType">The source type.</param>
+        /// <param name="destinationType">The destination type.</param>
+        /// <param name="map">The configured type map.</param>
+        /// <returns>True when the map exists.</returns>
+        internal bool TryGetMap(Type sourceType, Type destinationType, out TypeMap map)
+            => _maps.TryGetValue(new MapKey(sourceType, destinationType), out map);
+
+        /// <summary>
         /// Adds an inline lifecycle action to the configuration.
         /// </summary>
         /// <typeparam name="TSource">The source type.</typeparam>

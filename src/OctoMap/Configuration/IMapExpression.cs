@@ -53,6 +53,14 @@ namespace OctoMap
             where TAction : IMappingAction<TSource, TDestination>;
 
         /// <summary>
+        /// Includes explicit member configuration from a base map.
+        /// </summary>
+        /// <typeparam name="TBaseSource">The base source type.</typeparam>
+        /// <typeparam name="TBaseDestination">The base destination type.</typeparam>
+        /// <returns>The current map expression.</returns>
+        IMapExpression<TSource, TDestination> IncludeBase<TBaseSource, TBaseDestination>();
+
+        /// <summary>
         /// Configures a destination member.
         /// </summary>
         /// <typeparam name="TMember">The destination member type.</typeparam>

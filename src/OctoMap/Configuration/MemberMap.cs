@@ -112,5 +112,32 @@ namespace OctoMap.Configuration
         /// Gets or sets the configured source index for multi-source maps.
         /// </summary>
         public int SourceIndex { get; set; }
+
+        /// <summary>
+        /// Copies configuration from another member map.
+        /// </summary>
+        /// <param name="source">The source member map.</param>
+        public void CopyFrom(MemberMap source)
+        {
+            if (source == null)
+            {
+                throw new ArgumentNullException(nameof(source));
+            }
+
+            IsIgnored = source.IsIgnored;
+            SourceExpression = source.SourceExpression;
+            PreConditionExpression = source.PreConditionExpression;
+            ConditionExpression = source.ConditionExpression;
+            ResolverType = source.ResolverType;
+            ConverterType = source.ConverterType;
+            ConverterSourceExpression = source.ConverterSourceExpression;
+            HasConstantValue = source.HasConstantValue;
+            ConstantValue = source.ConstantValue;
+            HasNullSubstitute = source.HasNullSubstitute;
+            NullSubstitute = source.NullSubstitute;
+            AllowNullCollection = source.AllowNullCollection;
+            IgnoreNullSourceValue = source.IgnoreNullSourceValue;
+            SourceIndex = source.SourceIndex;
+        }
     }
 }

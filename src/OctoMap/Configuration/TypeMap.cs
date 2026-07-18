@@ -103,5 +103,22 @@ namespace OctoMap.Configuration
 
             return memberMap;
         }
+
+        /// <summary>
+        /// Copies a configured member map into this map.
+        /// </summary>
+        /// <param name="sourceMemberMap">The source member map.</param>
+        public void CopyMemberMap(MemberMap sourceMemberMap)
+        {
+            if (sourceMemberMap == null)
+            {
+                throw new ArgumentNullException(nameof(sourceMemberMap));
+            }
+
+            var target = sourceMemberMap.UsesDestinationPath
+                ? GetOrAddMemberPathMap(sourceMemberMap.DestinationPath)
+                : GetOrAddMemberMap(sourceMemberMap.DestinationProperty);
+            target.CopyFrom(sourceMemberMap);
+        }
     }
 }

@@ -68,6 +68,42 @@ namespace OctoMap.Configuration
             => AddLifecycleAction(LifecycleActionTiming.After, null, typeof(TAction));
 
         /// <inheritdoc/>
+        public IMapExpression<TSource, TDestination> IncludeBase<TBaseSource, TBaseDestination>()
+        {
+            if (_configurationBuilder == null)
+            {
+                throw new NotSupportedException("IncludeBase requires a map created directly through CreateMap.");
+            }
+
+            if (!typeof(TBaseSource).IsAssignableFrom(typeof(TSource)))
+            {
+                throw new InvalidOperationException($"Base source type '{typeof(TBaseSource).FullName}' is not assignable from source type '{typeof(TSource).FullName}'.");
+            }
+
+            if (!typeof(TBaseDestination).IsAssignableFrom(typeof(TDestination)))
+            {
+                throw new InvalidOperationException($"Base destination type '{typeof(TBaseDestination).FullName}' is not assignable from destination type '{typeof(TDestination).FullName}'.");
+            }
+
+            if (!_configurationBuilder.TryGetMap(typeof(TBaseSource), typeof(TBaseDestination), out var baseMap))
+            {
+                throw new InvalidOperationException($"Base map '{typeof(TBaseSource).FullName}->{typeof(TBaseDestination).FullName}' is not configured.");
+            }
+
+            foreach (var memberMap in baseMap.MemberMaps.Values)
+            {
+                if (_typeMap.MemberMaps.ContainsKey(GetMemberMapKey(memberMap)))
+                {
+                    continue;
+                }
+
+                _typeMap.CopyMemberMap(memberMap);
+            }
+
+            return this;
+        }
+
+        /// <inheritdoc/>
         public IMapExpression<TSource, TDestination> ForMember<TMember>(
             Expression<Func<TDestination, TMember>> destinationMember,
             Action<IMemberMapExpression<TSource, TDestination, TMember>> configure)
@@ -247,5 +283,10 @@ namespace OctoMap.Configuration
 
             return Expression.Lambda(current, parameter);
         }
+
+        private static string GetMemberMapKey(MemberMap memberMap)
+            => memberMap.UsesDestinationPath
+                ? string.Join(".", memberMap.DestinationPath.Select(x => x.Name))
+                : memberMap.DestinationProperty.Name;
     }
 }
