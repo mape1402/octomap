@@ -135,7 +135,9 @@ namespace OctoMap.Configuration
             {
                 if (TryGetDirectSourceProperty(memberMap.SourceExpression, out var sourceProperty))
                 {
-                    var reverseSourceProperty = _typeMap.DestinationType.GetProperty(memberMap.DestinationProperty.Name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.IgnoreCase);
+                    var reverseSourceProperty = memberMap.UsesDestinationPath
+                        ? memberMap.DestinationPath[0]
+                        : _typeMap.DestinationType.GetProperty(memberMap.DestinationProperty.Name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.IgnoreCase);
                     if (reverseSourceProperty == null || !reverseSourceProperty.CanRead)
                     {
                         continue;
@@ -148,12 +150,16 @@ namespace OctoMap.Configuration
                     }
 
                     var reverseMemberMap = reverseMap.GetOrAddMemberMap(reverseDestinationProperty);
-                    reverseMemberMap.SourceExpression = CreateSourcePropertyExpression(reverseSourceProperty);
+                    reverseMemberMap.SourceExpression = memberMap.UsesDestinationPath
+                        ? CreateSourcePropertyPathExpression(memberMap.DestinationPath)
+                        : CreateSourcePropertyExpression(reverseSourceProperty);
                     reverseMemberMap.IsIgnored = false;
                     reverseMemberMap.HasConstantValue = false;
                     reverseMemberMap.ResolverType = null;
                     reverseMemberMap.ConverterType = null;
                     reverseMemberMap.ConverterSourceExpression = null;
+                    reverseMemberMap.AllowNullCollection = memberMap.AllowNullCollection;
+                    reverseMemberMap.IgnoreNullSourceValue = memberMap.IgnoreNullSourceValue;
                 }
             }
         }
@@ -191,6 +197,18 @@ namespace OctoMap.Configuration
         {
             var parameter = Expression.Parameter(typeof(TDestination), "source");
             return Expression.Lambda(Expression.Property(parameter, sourceProperty), parameter);
+        }
+
+        private static LambdaExpression CreateSourcePropertyPathExpression(IReadOnlyList<PropertyInfo> sourcePath)
+        {
+            var parameter = Expression.Parameter(typeof(TDestination), "source");
+            Expression current = parameter;
+            foreach (var property in sourcePath)
+            {
+                current = Expression.Property(current, property);
+            }
+
+            return Expression.Lambda(current, parameter);
         }
     }
 }

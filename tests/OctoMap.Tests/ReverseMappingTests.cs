@@ -50,6 +50,23 @@ namespace OctoMap.Tests
             Assert.Equal("READY", destination.Status);
         }
 
+        [Fact]
+        public void ReverseMap_Reverses_Explicit_ForPath_Unflattening()
+        {
+            var provider = CreateProvider<ReverseForPathProfile>();
+            var mapper = provider.GetRequiredService<IOctoMapper>();
+
+            var destination = mapper.Map<ReversePathOrder, ReversePathOrderDto>(new ReversePathOrder
+            {
+                Customer = new ReversePathCustomer
+                {
+                    FirstName = "Katherine"
+                }
+            });
+
+            Assert.Equal("Katherine", destination.CustomerFirstName);
+        }
+
         private static ServiceProvider CreateProvider<TProfile>()
             where TProfile : OctoMapProfile, new()
         {
@@ -84,6 +101,16 @@ namespace OctoMap.Tests
                 builder.CreateMap<ReverseOrder, ReverseOrderDto>()
                     .ReverseMap()
                     .ForMember(x => x.Status, x => x.MapFrom(s => s.Label.ToUpperInvariant()));
+            }
+        }
+
+        public sealed class ReverseForPathProfile : OctoMapProfile
+        {
+            public override void Configure(IOctoMapConfigurationBuilder builder)
+            {
+                builder.CreateMap<ReversePathOrderDto, ReversePathOrder>()
+                    .ForPath(x => x.Customer.FirstName, x => x.MapFrom(s => s.CustomerFirstName))
+                    .ReverseMap();
             }
         }
 
@@ -123,6 +150,21 @@ namespace OctoMap.Tests
             public int Id { get; set; }
 
             public string Label { get; set; }
+        }
+
+        public sealed class ReversePathOrder
+        {
+            public ReversePathCustomer Customer { get; set; }
+        }
+
+        public sealed class ReversePathCustomer
+        {
+            public string FirstName { get; set; }
+        }
+
+        public sealed class ReversePathOrderDto
+        {
+            public string CustomerFirstName { get; set; }
         }
     }
 }
