@@ -75,5 +75,26 @@ namespace OctoMap.Tests
             Assert.DoesNotContain("Dynabee", source, StringComparison.Ordinal);
             Assert.DoesNotContain("IMappingGenerationBackend", source, StringComparison.Ordinal);
         }
+
+        [Fact]
+        public void Diagnostics_Do_Not_Reference_Dynabee()
+        {
+            var sourcePath = Path.GetFullPath(Path.Combine(
+                AppContext.BaseDirectory,
+                "..",
+                "..",
+                "..",
+                "..",
+                "..",
+                "src",
+                "OctoMap",
+                "Diagnostics",
+                "ConventionMappingPlanDescriber.cs"));
+            var source = File.ReadAllText(sourcePath);
+
+            Assert.DoesNotContain("DynaBee", source, StringComparison.Ordinal);
+            Assert.DoesNotContain("Dynabee", source, StringComparison.Ordinal);
+            Assert.DoesNotContain("IMappingGenerationBackend", source, StringComparison.Ordinal);
+        }
     }
 }

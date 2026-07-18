@@ -1,5 +1,7 @@
 namespace OctoMap.Configuration
 {
+    using OctoMap.Diagnostics;
+    using OctoMap.Planning;
     using OctoMap.Validation;
 
     /// <summary>
@@ -9,6 +11,16 @@ namespace OctoMap.Configuration
     {
         private readonly Dictionary<MapKey, TypeMap> _maps = new();
         private readonly List<MultiSourceTypeMap> _multiMaps = new();
+
+        /// <summary>
+        /// Gets the configured single-source maps.
+        /// </summary>
+        internal IReadOnlyDictionary<MapKey, TypeMap> Maps => new Dictionary<MapKey, TypeMap>(_maps);
+
+        /// <summary>
+        /// Gets the configured multi-source maps.
+        /// </summary>
+        internal IReadOnlyDictionary<MapKey, MultiSourceTypeMap> MultiMaps => BuildMultiMaps();
 
         /// <inheritdoc/>
         public IMapExpression<TSource, TDestination> CreateMap<TSource, TDestination>()
@@ -54,6 +66,14 @@ namespace OctoMap.Configuration
         /// </summary>
         /// <returns>The immutable configuration.</returns>
         public IOctoMapConfiguration Build()
+            => new OctoMapConfiguration(
+                Maps,
+                MultiMaps,
+                new OctoMapValidator(),
+                new ConventionMappingPlanBuilder(new OctoMapOptions()),
+                new ConventionMappingPlanDescriber());
+
+        private IReadOnlyDictionary<MapKey, MultiSourceTypeMap> BuildMultiMaps()
         {
             var multiMaps = new Dictionary<MapKey, MultiSourceTypeMap>();
             foreach (var multiMap in _multiMaps)
@@ -61,10 +81,7 @@ namespace OctoMap.Configuration
                 multiMaps[new MapKey(multiMap.SourceTypes, multiMap.DestinationType)] = multiMap;
             }
 
-            return new OctoMapConfiguration(
-                new Dictionary<MapKey, TypeMap>(_maps),
-                multiMaps,
-                new OctoMapValidator());
+            return multiMaps;
         }
     }
 }

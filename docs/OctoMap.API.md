@@ -279,6 +279,36 @@ public interface IOctoMapper
 
 Typed single-source maps use generated mapper interfaces. Runtime single-source and multi-source maps use DynaBee generated method invokers.
 
+## Plan Diagnostics
+
+```csharp
+public interface IOctoMapConfiguration
+{
+    MappingPlan GetPlan<TSource, TDestination>();
+    MappingPlan GetPlan(Type sourceType, Type destinationType);
+    MappingPlan GetPlan(IReadOnlyList<Type> sourceTypes, Type destinationType);
+    string DescribeMap<TSource, TDestination>();
+    string DescribeMap(Type sourceType, Type destinationType);
+    string DescribeMap(IReadOnlyList<Type> sourceTypes, Type destinationType);
+}
+```
+
+`GetPlan(...)` returns the executable mapping plan after validation. `DescribeMap(...)` returns a human-readable assignment report.
+
+```csharp
+var description = configuration.DescribeMap<Order, OrderDto>();
+```
+
+Example output:
+
+```text
+OrderDto.Id <- Order.Id
+OrderDto.CustomerName <- Order.Customer.Name
+OrderDto.TotalText <- OrderTotalTextConverter(Order.Total)
+```
+
+The default plan describer is registered as `IMappingPlanDescriber`, so diagnostic formatting can be replaced without changing the mapping runtime.
+
 ## Interface-Based Registration
 
 ```csharp

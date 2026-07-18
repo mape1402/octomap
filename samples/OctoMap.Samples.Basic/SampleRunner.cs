@@ -8,18 +8,22 @@ namespace OctoMap.Samples.Basic
     public sealed class SampleRunner
     {
         private readonly IOctoMapper _mapper;
+        private readonly IOctoMapConfiguration _configuration;
         private readonly SampleSalesDbContext _dbContext;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="SampleRunner"/> class.
         /// </summary>
         /// <param name="mapper">The OctoMap mapper.</param>
+        /// <param name="configuration">The OctoMap configuration.</param>
         /// <param name="dbContext">The Entity Framework sample database context.</param>
         public SampleRunner(
             IOctoMapper mapper,
+            IOctoMapConfiguration configuration,
             SampleSalesDbContext dbContext)
         {
             _mapper = mapper ?? throw new ArgumentNullException(nameof(mapper));
+            _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
             _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         }
 
@@ -38,6 +42,9 @@ namespace OctoMap.Samples.Basic
 
             var customerDto = _mapper.Map<Customer, CustomerDto>(customer);
             Console.WriteLine($"Configured map: {customerDto.Id} - {customerDto.FullName} - internal '{customerDto.InternalCode ?? "ignored"}'");
+
+            var planDescription = _configuration.DescribeMap<Customer, CustomerDto>().Split(Environment.NewLine)[0];
+            Console.WriteLine($"Plan description: {planDescription}");
 
             var customerRecordDto = _mapper.Map<Customer, CustomerRecordDto>(customer);
             Console.WriteLine($"Constructor map: {customerRecordDto.Id} - {customerRecordDto.FullName}");

@@ -514,6 +514,8 @@ var report = configuration.DescribeMap<Customer, CustomerDto>();
 var plan = configuration.GetPlan<Customer, CustomerDto>();
 ```
 
+The first diagnostics pass exposes validated mapping plans and a replaceable `IMappingPlanDescriber`. Diagnostics consume `MappingPlan`; they must not depend on DynaBee or generated runtime type details.
+
 ## Extensibility Layer
 
 OctoMap should support extension points without exposing internal mutability everywhere.

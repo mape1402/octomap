@@ -32,6 +32,7 @@ These capabilities are already implemented or have an initial working version:
 - basic `ReverseMap()`
 - first-pass `ProjectTo(...)` expression projection
 - first-pass `ForPath(...)` runtime destination path mapping
+- first-pass mapping plan inspection and description
 - README, API docs, architecture docs, sample project, and unit tests
 
 ## Core Principles
@@ -157,6 +158,24 @@ OrderDto.StatusLabel <- OrderStatusLabelResolver
 ```
 
 This is important for debugging, documentation, and trust.
+
+Implemented first pass:
+
+- `GetPlan<TSource, TDestination>()`
+- `GetPlan(Type, Type)`
+- `GetPlan(IReadOnlyList<Type>, Type)` for multi-source maps
+- `DescribeMap<TSource, TDestination>()`
+- `DescribeMap(Type, Type)`
+- `DescribeMap(IReadOnlyList<Type>, Type)` for multi-source maps
+- replaceable `IMappingPlanDescriber`
+
+Remaining work:
+
+- strict mode for unmapped destination members
+- warnings instead of only errors
+- richer reason codes for skipped members
+- projection compatibility validation
+- generated backend diagnostics
 
 ### 4. Conditional Mapping
 

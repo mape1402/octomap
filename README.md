@@ -563,6 +563,26 @@ Validation catches cases such as:
 - duplicate multi-source destination member configuration
 - ambiguous `ctx.Get<TSource>()` calls
 
+## Plan Diagnostics
+
+OctoMap can expose the mapping plan used by runtime generation and projections.
+
+```csharp
+var plan = configuration.GetPlan<Order, OrderDto>();
+var description = configuration.DescribeMap<Order, OrderDto>();
+```
+
+Example description:
+
+```text
+OrderDto.Id <- Order.Id
+OrderDto.CustomerName <- Order.Customer.Name
+OrderDto.TotalText <- OrderTotalTextConverter(Order.Total)
+OrderDto.StatusLabel <- OrderStatusLabelResolver
+```
+
+This diagnostic path is built from OctoMap planning data. It does not expose DynaBee contracts or generated runtime types.
+
 ## Runtime Behavior
 
 OctoMap caches compiled maps by source type set and destination type.
@@ -602,6 +622,7 @@ Expected output:
 
 ```text
 Configured map: 100 - Grace Hopper - internal 'ignored'
+Plan description: CustomerDto.Id <- Customer.Id
 Constructor map: 100 - Grace Hopper
 Implicit map: OCTO-001 - 49.95
 Reverse map: OCTO-001 - 49.95
@@ -630,7 +651,7 @@ dotnet run -c Release -f net8.0 --project benchmarks/OctoMap.Benchmarks/OctoMap.
 
 ## Current Status
 
-OctoMap is in early alpha. The core runtime path, explicit maps, runtime implicit single-source maps, interface-based map registration, explicit multi-source maps, nested mapping, collection mapping, DI resolvers, value converters, validation, first-pass projection mapping, tests, sample project, and DynaBee-backed generation are implemented.
+OctoMap is in early alpha. The core runtime path, explicit maps, runtime implicit single-source maps, interface-based map registration, explicit multi-source maps, nested mapping, collection mapping, DI resolvers, value converters, validation, first-pass projection mapping, first-pass plan diagnostics, tests, sample project, and DynaBee-backed generation are implemented.
 
 Upcoming areas include:
 

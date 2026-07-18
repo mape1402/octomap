@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using OctoMap.Configuration;
 using OctoMap.DependencyInjection;
+using OctoMap.Diagnostics;
 using OctoMap.Generation;
 using OctoMap.Generation.Dynabee;
 using OctoMap.Planning;
@@ -48,14 +49,22 @@ namespace OctoMap
             configureOptions?.Invoke(options);
 
             var discovery = new OctoMapProfileDiscovery();
-            var configuration = BuildConfiguration(discovery.Discover(profileAssemblies), profileAssemblies);
+            var configurationBuilder = BuildConfigurationBuilder(discovery.Discover(profileAssemblies), profileAssemblies);
+            var maps = configurationBuilder.Maps;
+            var multiMaps = configurationBuilder.MultiMaps;
 
             services.AddSingleton(options);
-            services.AddSingleton(configuration);
-            services.AddSingleton<IOctoMapConfiguration>(configuration);
             services.AddSingleton<IOctoMapProfileDiscovery, OctoMapProfileDiscovery>();
             services.AddSingleton<IOctoMapValidator, OctoMapValidator>();
             services.AddSingleton<IMappingPlanBuilder, ConventionMappingPlanBuilder>();
+            services.TryAddSingleton<IMappingPlanDescriber, ConventionMappingPlanDescriber>();
+            services.AddSingleton(sp => new OctoMapConfiguration(
+                maps,
+                multiMaps,
+                sp.GetRequiredService<IOctoMapValidator>(),
+                sp.GetRequiredService<IMappingPlanBuilder>(),
+                sp.GetRequiredService<IMappingPlanDescriber>()));
+            services.AddSingleton<IOctoMapConfiguration>(sp => sp.GetRequiredService<OctoMapConfiguration>());
             services.TryAddSingleton<IDynaBeeAssemblyBuilderFactory, DynaBeeAssemblyBuilderFactory>();
             services.AddSingleton<IMappingGenerationBackend, DynabeeMappingGenerationBackend>();
             services.AddSingleton<ICompiledMapRegistry, CompiledMapRegistry>();
@@ -67,7 +76,9 @@ namespace OctoMap
             return services;
         }
 
-        private static OctoMapConfiguration BuildConfiguration(IReadOnlyCollection<OctoMapProfile> profiles, IReadOnlyCollection<Assembly> profileAssemblies)
+        private static OctoMapConfigurationBuilder BuildConfigurationBuilder(
+            IReadOnlyCollection<OctoMapProfile> profiles,
+            IReadOnlyCollection<Assembly> profileAssemblies)
         {
             var builder = new OctoMapConfigurationBuilder();
             foreach (var profile in profiles)
@@ -80,7 +91,7 @@ namespace OctoMap
                 RegisterInterfaceMaps(builder, assembly);
             }
 
-            return (OctoMapConfiguration)builder.Build();
+            return builder;
         }
 
         private static void RegisterInterfaceMaps(OctoMapConfigurationBuilder builder, Assembly assembly)

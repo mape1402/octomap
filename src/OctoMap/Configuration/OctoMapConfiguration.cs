@@ -1,5 +1,6 @@
 namespace OctoMap.Configuration
 {
+    using OctoMap.Planning;
     using OctoMap.Validation;
 
     /// <summary>
@@ -10,6 +11,8 @@ namespace OctoMap.Configuration
         private readonly IReadOnlyDictionary<MapKey, TypeMap> _maps;
         private readonly IReadOnlyDictionary<MapKey, MultiSourceTypeMap> _multiMaps;
         private readonly IOctoMapValidator _validator;
+        private readonly IMappingPlanBuilder _planBuilder;
+        private readonly IMappingPlanDescriber _planDescriber;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="OctoMapConfiguration"/> class.
@@ -17,14 +20,20 @@ namespace OctoMap.Configuration
         /// <param name="maps">The configured maps.</param>
         /// <param name="multiMaps">The configured multi-source maps.</param>
         /// <param name="validator">The configuration validator.</param>
+        /// <param name="planBuilder">The mapping plan builder.</param>
+        /// <param name="planDescriber">The mapping plan describer.</param>
         public OctoMapConfiguration(
             IReadOnlyDictionary<MapKey, TypeMap> maps,
             IReadOnlyDictionary<MapKey, MultiSourceTypeMap> multiMaps,
-            IOctoMapValidator validator)
+            IOctoMapValidator validator,
+            IMappingPlanBuilder planBuilder,
+            IMappingPlanDescriber planDescriber)
         {
             _maps = maps ?? throw new ArgumentNullException(nameof(maps));
             _multiMaps = multiMaps ?? throw new ArgumentNullException(nameof(multiMaps));
             _validator = validator ?? throw new ArgumentNullException(nameof(validator));
+            _planBuilder = planBuilder ?? throw new ArgumentNullException(nameof(planBuilder));
+            _planDescriber = planDescriber ?? throw new ArgumentNullException(nameof(planDescriber));
         }
 
         /// <inheritdoc/>
@@ -42,6 +51,48 @@ namespace OctoMap.Configuration
         }
 
         /// <inheritdoc/>
+        public MappingPlan GetPlan<TSource, TDestination>()
+            => GetPlan(typeof(TSource), typeof(TDestination));
+
+        /// <inheritdoc/>
+        public MappingPlan GetPlan(Type sourceType, Type destinationType)
+        {
+            var map = FindMap(sourceType, destinationType);
+            if (map == null)
+            {
+                throw new InvalidOperationException($"Map '{sourceType.FullName}->{destinationType.FullName}' is not configured.");
+            }
+
+            ValidateOrThrow(map);
+            return _planBuilder.Build(map);
+        }
+
+        /// <inheritdoc/>
+        public MappingPlan GetPlan(IReadOnlyList<Type> sourceTypes, Type destinationType)
+        {
+            var map = FindMap(sourceTypes, destinationType);
+            if (map == null)
+            {
+                throw new InvalidOperationException($"Map '{string.Join(",", sourceTypes.Select(x => x.FullName))}->{destinationType.FullName}' is not configured.");
+            }
+
+            ValidateOrThrow(map);
+            return _planBuilder.Build(map);
+        }
+
+        /// <inheritdoc/>
+        public string DescribeMap<TSource, TDestination>()
+            => DescribeMap(typeof(TSource), typeof(TDestination));
+
+        /// <inheritdoc/>
+        public string DescribeMap(Type sourceType, Type destinationType)
+            => _planDescriber.Describe(GetPlan(sourceType, destinationType));
+
+        /// <inheritdoc/>
+        public string DescribeMap(IReadOnlyList<Type> sourceTypes, Type destinationType)
+            => _planDescriber.Describe(GetPlan(sourceTypes, destinationType));
+
+        /// <inheritdoc/>
         public OctoMapValidationReport Validate()
             => _validator.Validate(_maps.Values.Cast<ITypeMap>().Concat(_multiMaps.Values).ToArray());
 
@@ -49,6 +100,15 @@ namespace OctoMap.Configuration
         public void AssertValid()
         {
             var report = Validate();
+            if (!report.IsValid)
+            {
+                throw new OctoMapValidationException(report);
+            }
+        }
+
+        private void ValidateOrThrow(ITypeMap map)
+        {
+            var report = _validator.Validate(new[] { map });
             if (!report.IsValid)
             {
                 throw new OctoMapValidationException(report);
