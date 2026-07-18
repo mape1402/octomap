@@ -17,6 +17,12 @@ namespace OctoMap.Samples.Basic
             builder.CreateMap<OrderItem, OrderItemDto>()
                 .ForMember(x => x.Label, x => x.MapFrom(s => s.Sku + " x " + s.Quantity));
 
+            builder.CreateMap<OrderLine, OrderLineDto>()
+                .ForMember(x => x.DisplayName, x => x.MapFrom(s => s.DisplayName ?? s.Sku ?? "Unknown"))
+                .ForMember(x => x.Total, x => x.MapFrom(s => (s.UnitPrice * s.Quantity) - s.Discount))
+                .ForMember(x => x.QuantityRemainder, x => x.MapFrom(s => s.Quantity % 2))
+                .ForMember(x => x.CanShip, x => x.MapFrom(s => s.IsActive && s.Quantity > 0 && !s.IsDeleted));
+
             builder.CreateMap<Order, OrderDto>()
                 .ForMember(x => x.Status, x => x.MapFrom(s => s.StatusCode))
                 .ForMember(x => x.Description, x => x.NullSubstitute("No description"))

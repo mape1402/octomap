@@ -237,6 +237,21 @@ namespace OctoMap.Generation.Dynabee
                         : CreateDestinationCollection(body, assignment, body.Constant(0))),
                 whenFalse =>
                 {
+                    if (assignment.SourceCollectionShape == CollectionShape.Enumerable
+                        && assignment.DestinationCollectionShape != CollectionShape.Array)
+                    {
+                        whenFalse.Assign(destinationCollection, whenFalse.New(destinationCollectionType));
+                        whenFalse.ForEach(
+                            sourceCollection,
+                            $"item_{assignment.DestinationProperty.Name}",
+                            (sourceItem, loop) =>
+                            {
+                                var destinationItem = BuildCollectionItemValue(loop, sourceItem, context, assignment);
+                                AddCollectionItem(loop, destinationCollection, destinationItem, assignment);
+                            });
+                        return;
+                    }
+
                     var indexedSourceCollection = NormalizeSourceCollection(whenFalse, sourceCollection, assignment);
                     var indexedSourceShape = assignment.SourceCollectionShape == CollectionShape.Array
                         ? CollectionShape.Array
@@ -330,6 +345,15 @@ namespace OctoMap.Generation.Dynabee
                 return;
             }
 
+            AddCollectionItem(body, destinationCollection, destinationItem, assignment);
+        }
+
+        private static void AddCollectionItem(
+            IBeeMethodBodyBuilder body,
+            IBeeValueExpression destinationCollection,
+            IBeeValueExpression destinationItem,
+            MemberAssignmentPlan assignment)
+        {
             var addMethod = destinationCollection.Type.GetMethod(
                 nameof(List<object>.Add),
                 new[] { assignment.DestinationElementType });
@@ -384,6 +408,8 @@ namespace OctoMap.Generation.Dynabee
                     return BuildBinaryExpression(body, sources, binary, sourceParameter, sourceIndex);
                 case UnaryExpression unary when unary.NodeType == ExpressionType.Convert || unary.NodeType == ExpressionType.ConvertChecked:
                     return body.Convert(BuildExpression(body, sources, unary.Operand, sourceParameter, sourceIndex), unary.Type);
+                case UnaryExpression unary when unary.NodeType == ExpressionType.Not:
+                    return body.Not(BuildExpression(body, sources, unary.Operand, sourceParameter, sourceIndex));
                 case ConditionalExpression conditional:
                     return body.If(
                         BuildExpression(body, sources, conditional.Test, sourceParameter, sourceIndex),
@@ -433,10 +459,34 @@ namespace OctoMap.Generation.Dynabee
             ParameterExpression sourceParameter,
             int sourceIndex)
         {
+            if (expression.Method != null && expression.Method.IsStatic)
+            {
+                return body.StaticCall(
+                    expression.Method,
+                    BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex),
+                    BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex));
+            }
+
             switch (expression.NodeType)
             {
                 case ExpressionType.Add:
                     return body.Add(
+                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex),
+                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex));
+                case ExpressionType.Subtract:
+                    return body.Subtract(
+                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex),
+                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex));
+                case ExpressionType.Multiply:
+                    return body.Multiply(
+                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex),
+                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex));
+                case ExpressionType.Divide:
+                    return body.Divide(
+                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex),
+                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex));
+                case ExpressionType.Modulo:
+                    return body.Modulo(
                         BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex),
                         BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex));
                 case ExpressionType.Equal:
@@ -445,6 +495,34 @@ namespace OctoMap.Generation.Dynabee
                         BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex));
                 case ExpressionType.NotEqual:
                     return body.NotEqual(
+                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex),
+                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex));
+                case ExpressionType.LessThan:
+                    return body.LessThan(
+                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex),
+                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex));
+                case ExpressionType.LessThanOrEqual:
+                    return body.LessThanOrEqual(
+                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex),
+                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex));
+                case ExpressionType.GreaterThan:
+                    return body.GreaterThan(
+                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex),
+                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex));
+                case ExpressionType.GreaterThanOrEqual:
+                    return body.GreaterThanOrEqual(
+                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex),
+                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex));
+                case ExpressionType.AndAlso:
+                    return body.AndAlso(
+                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex),
+                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex));
+                case ExpressionType.OrElse:
+                    return body.OrElse(
+                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex),
+                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex));
+                case ExpressionType.Coalesce:
+                    return body.Coalesce(
                         BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex),
                         BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex));
                 default:

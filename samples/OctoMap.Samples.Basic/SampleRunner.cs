@@ -65,6 +65,19 @@ namespace OctoMap.Samples.Basic
 
             Console.WriteLine($"Resolver, value converter, nested map, collection map: {orderDto.Id} - {orderDto.Status} - {orderDto.Description} - {orderDto.StatusLabel} - {orderDto.TotalText} - {orderDto.Customer.FullName} - {orderDto.Items.Count} items");
 
+            var orderLineDto = _mapper.Map<OrderLine, OrderLineDto>(new OrderLine
+            {
+                Sku = "OCTO-HOODIE",
+                DisplayName = null,
+                UnitPrice = 39.99m,
+                Quantity = 3,
+                Discount = 10m,
+                IsActive = true,
+                IsDeleted = false
+            });
+
+            Console.WriteLine($"Generated expressions: {orderLineDto.DisplayName} - {orderLineDto.Total} - remainder {orderLineDto.QuantityRemainder} - can ship {orderLineDto.CanShip}");
+
             var registeredByInterface = _mapper.Map<WarehouseItemDto>(new WarehouseItem
             {
                 Code = "WH-42"

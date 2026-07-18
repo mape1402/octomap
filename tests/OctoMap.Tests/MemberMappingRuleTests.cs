@@ -44,6 +44,32 @@ namespace OctoMap.Tests
             Assert.Null(destination.InternalCode);
         }
 
+        [Fact]
+        public void MapFrom_Uses_Arithmetic_Logical_And_Coalesce_Expressions()
+        {
+            var services = new ServiceCollection();
+            services.AddOctoMap(typeof(ExpressionRuleProfile).Assembly);
+
+            var provider = services.BuildServiceProvider();
+            var mapper = provider.GetRequiredService<IOctoMapper>();
+
+            var destination = mapper.Map<ExpressionRuleSource, ExpressionRuleDestination>(new ExpressionRuleSource
+            {
+                UnitPrice = 12.50m,
+                Quantity = 4,
+                Discount = 5m,
+                IsActive = true,
+                IsDeleted = false,
+                DisplayName = null,
+                FallbackName = "Fallback"
+            });
+
+            Assert.Equal(45m, destination.Total);
+            Assert.Equal(0, destination.QuantityRemainder);
+            Assert.True(destination.CanShip);
+            Assert.Equal("Fallback", destination.Name);
+        }
+
         public sealed class MemberRuleProfile : OctoMapProfile
         {
             public override void Configure(IOctoMapConfigurationBuilder builder)
@@ -51,6 +77,18 @@ namespace OctoMap.Tests
                 builder.CreateMap<Person, PersonDto>()
                     .ForMember(x => x.FullName, x => x.MapFrom(s => s.FirstName + " " + s.LastName))
                     .ForMember(x => x.InternalCode, x => x.Ignore());
+            }
+        }
+
+        public sealed class ExpressionRuleProfile : OctoMapProfile
+        {
+            public override void Configure(IOctoMapConfigurationBuilder builder)
+            {
+                builder.CreateMap<ExpressionRuleSource, ExpressionRuleDestination>()
+                    .ForMember(x => x.Total, x => x.MapFrom(s => (s.UnitPrice * s.Quantity) - s.Discount))
+                    .ForMember(x => x.QuantityRemainder, x => x.MapFrom(s => s.Quantity % 2))
+                    .ForMember(x => x.CanShip, x => x.MapFrom(s => s.IsActive && s.Quantity > 0 && !s.IsDeleted))
+                    .ForMember(x => x.Name, x => x.MapFrom(s => s.DisplayName ?? s.FallbackName ?? "Unknown"));
             }
         }
 
@@ -72,6 +110,34 @@ namespace OctoMap.Tests
             public int Age { get; set; }
 
             public string InternalCode { get; set; }
+        }
+
+        public sealed class ExpressionRuleSource
+        {
+            public decimal UnitPrice { get; set; }
+
+            public int Quantity { get; set; }
+
+            public decimal Discount { get; set; }
+
+            public bool IsActive { get; set; }
+
+            public bool IsDeleted { get; set; }
+
+            public string DisplayName { get; set; }
+
+            public string FallbackName { get; set; }
+        }
+
+        public sealed class ExpressionRuleDestination
+        {
+            public decimal Total { get; set; }
+
+            public int QuantityRemainder { get; set; }
+
+            public bool CanShip { get; set; }
+
+            public string Name { get; set; }
         }
     }
 }

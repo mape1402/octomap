@@ -119,5 +119,17 @@ namespace OctoMap.Configuration
             _memberMap.HasNullSubstitute = true;
             _memberMap.NullSubstitute = value;
         }
+
+        /// <inheritdoc/>
+        public void AllowNullCollection(bool allowNull)
+        {
+            _memberMap.AllowNullCollection = allowNull;
+        }
+
+        /// <inheritdoc/>
+        public void UseEmptyCollectionWhenNull()
+        {
+            _memberMap.AllowNullCollection = false;
+        }
     }
 }

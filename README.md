@@ -137,6 +137,15 @@ Supported member rules:
 - `NullSubstitute(...)`: replaces null source results for reference-type destination members.
 - `Ignore()`: excludes a destination member.
 
+`MapFrom(...)` supports common generated expression shapes, including member access, constants, conversions, conditional expressions, arithmetic, comparisons, short-circuiting boolean logic, boolean negation, null coalescing, and string concatenation.
+
+```csharp
+builder.CreateMap<OrderLine, OrderLineDto>()
+    .ForMember(x => x.Total, x => x.MapFrom(s => (s.UnitPrice * s.Quantity) - s.Discount))
+    .ForMember(x => x.CanShip, x => x.MapFrom(s => s.IsActive && s.Quantity > 0 && !s.IsDeleted))
+    .ForMember(x => x.DisplayName, x => x.MapFrom(s => s.DisplayName ?? s.Sku ?? "Unknown"));
+```
+
 ## DI-Based Value Converters
 
 Value converters transform one source member value into one destination member value. They are useful when the conversion depends on application services, formatting rules, localization, or domain policies.
@@ -332,6 +341,20 @@ services.AddOctoMap(
     typeof(SalesProfile).Assembly);
 ```
 
+You can also override the behavior for a specific collection member:
+
+```csharp
+builder.CreateMap<Order, OrderDto>()
+    .ForMember(x => x.Items, x => x.UseEmptyCollectionWhenNull());
+```
+
+Or explicitly preserve null for one member when the global option maps null collections to empty collections:
+
+```csharp
+builder.CreateMap<Order, OrderDto>()
+    .ForMember(x => x.Items, x => x.AllowNullCollection(true));
+```
+
 ## Interface-Based Registration
 
 Types can opt into map registration with marker interfaces.
@@ -493,7 +516,7 @@ OctoMap is in early alpha. The core runtime path, explicit maps, runtime implici
 Upcoming areas include:
 
 - broader expression support
-- per-member null collection rules
 - richer collection destination support
+- item converters for collection members
 - richer diagnostics
 - benchmarks against manual mapping and AutoMapper

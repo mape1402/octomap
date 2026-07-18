@@ -55,5 +55,16 @@ namespace OctoMap
         /// </summary>
         /// <param name="value">The replacement value.</param>
         void NullSubstitute(TMember value);
+
+        /// <summary>
+        /// Configures whether a null source collection can map to a null destination collection for this member.
+        /// </summary>
+        /// <param name="allowNull">True to preserve null collections; false to map null collections to empty collections.</param>
+        void AllowNullCollection(bool allowNull);
+
+        /// <summary>
+        /// Maps a null source collection to an empty destination collection for this member.
+        /// </summary>
+        void UseEmptyCollectionWhenNull();
     }
 }

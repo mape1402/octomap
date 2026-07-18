@@ -88,7 +88,8 @@ namespace OctoMap.Planning
                     continue;
                 }
 
-                if (TryCreateCollectionAssignment(destinationProperty, sourceProperty, out var collectionAssignment))
+                explicitMemberMaps.TryGetValue(destinationProperty.Name, out var configuredMemberMap);
+                if (TryCreateCollectionAssignment(destinationProperty, sourceProperty, configuredMemberMap, out var collectionAssignment))
                 {
                     assignments.Add(collectionAssignment);
                     continue;
@@ -276,6 +277,7 @@ namespace OctoMap.Planning
         private bool TryCreateCollectionAssignment(
             PropertyInfo destinationProperty,
             PropertyInfo sourceProperty,
+            MemberMap memberMap,
             out MemberAssignmentPlan assignment)
         {
             assignment = null;
@@ -297,7 +299,7 @@ namespace OctoMap.Planning
                 destinationShape,
                 sourceElementType,
                 destinationElementType,
-                _options.AllowNullCollections,
+                memberMap?.AllowNullCollection ?? _options.AllowNullCollections,
                 false,
                 null,
                 false,

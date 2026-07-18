@@ -137,13 +137,16 @@ namespace OctoMap.Validation
                 case BinaryExpression binary:
                     ValidateExpression(map, memberMap, binary.Left, sourceParameter, issues);
                     ValidateExpression(map, memberMap, binary.Right, sourceParameter, issues);
-                    if (binary.NodeType != ExpressionType.Add && binary.NodeType != ExpressionType.Equal && binary.NodeType != ExpressionType.NotEqual)
+                    if (!IsSupportedBinaryExpression(binary.NodeType))
                     {
                         issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"Binary expression '{binary.NodeType}' is not supported in MapFrom expressions."));
                     }
 
                     return;
                 case UnaryExpression unary when unary.NodeType == ExpressionType.Convert || unary.NodeType == ExpressionType.ConvertChecked:
+                    ValidateExpression(map, memberMap, unary.Operand, sourceParameter, issues);
+                    return;
+                case UnaryExpression unary when unary.NodeType == ExpressionType.Not:
                     ValidateExpression(map, memberMap, unary.Operand, sourceParameter, issues);
                     return;
                 case ConditionalExpression conditional:
@@ -238,13 +241,16 @@ namespace OctoMap.Validation
                 case BinaryExpression binary:
                     ValidateMultiSourceExpression(map, memberMap, binary.Left, sourceParameter, issues);
                     ValidateMultiSourceExpression(map, memberMap, binary.Right, sourceParameter, issues);
-                    if (binary.NodeType != ExpressionType.Add && binary.NodeType != ExpressionType.Equal && binary.NodeType != ExpressionType.NotEqual)
+                    if (!IsSupportedBinaryExpression(binary.NodeType))
                     {
                         issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"Binary expression '{binary.NodeType}' is not supported in multi-source MapFrom expressions."));
                     }
 
                     return;
                 case UnaryExpression unary when unary.NodeType == ExpressionType.Convert || unary.NodeType == ExpressionType.ConvertChecked:
+                    ValidateMultiSourceExpression(map, memberMap, unary.Operand, sourceParameter, issues);
+                    return;
+                case UnaryExpression unary when unary.NodeType == ExpressionType.Not:
                     ValidateMultiSourceExpression(map, memberMap, unary.Operand, sourceParameter, issues);
                     return;
                 case ConditionalExpression conditional:
@@ -286,6 +292,22 @@ namespace OctoMap.Validation
                 issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"Multi-source map has more than one source assignable to '{requestedType.FullName}'."));
             }
         }
+
+        private static bool IsSupportedBinaryExpression(ExpressionType nodeType)
+            => nodeType == ExpressionType.Add
+                || nodeType == ExpressionType.Subtract
+                || nodeType == ExpressionType.Multiply
+                || nodeType == ExpressionType.Divide
+                || nodeType == ExpressionType.Modulo
+                || nodeType == ExpressionType.Equal
+                || nodeType == ExpressionType.NotEqual
+                || nodeType == ExpressionType.LessThan
+                || nodeType == ExpressionType.LessThanOrEqual
+                || nodeType == ExpressionType.GreaterThan
+                || nodeType == ExpressionType.GreaterThanOrEqual
+                || nodeType == ExpressionType.AndAlso
+                || nodeType == ExpressionType.OrElse
+                || nodeType == ExpressionType.Coalesce;
 
         private static void ValidateDuplicateMultiSourceDestinations(MultiSourceTypeMap map, List<OctoMapValidationIssue> issues)
         {

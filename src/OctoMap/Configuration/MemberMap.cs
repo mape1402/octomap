@@ -68,6 +68,11 @@ namespace OctoMap.Configuration
         public object NullSubstitute { get; set; }
 
         /// <summary>
+        /// Gets or sets the per-member null collection behavior override.
+        /// </summary>
+        public bool? AllowNullCollection { get; set; }
+
+        /// <summary>
         /// Gets or sets the configured source index for multi-source maps.
         /// </summary>
         public int SourceIndex { get; set; }

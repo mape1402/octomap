@@ -77,7 +77,7 @@ namespace OctoMap.Tests
         }
 
         [Fact]
-        public void Map_Normalizes_Enumerable_Source_And_Assigns_List_To_Interface_Destination()
+        public void Map_Enumerates_Enumerable_Source_And_Assigns_List_To_Interface_Destination()
         {
             var provider = CreateProvider<InterfaceCollectionProfile>();
             var mapper = provider.GetRequiredService<IOctoMapper>();
@@ -103,17 +103,50 @@ namespace OctoMap.Tests
             var services = new ServiceCollection();
             services.AddOctoMap(
                 options => options.AllowNullCollections = false,
-                typeof(ConfiguredCollectionProfile).Assembly);
+                typeof(NullCollectionOptionProfile).Assembly);
             var provider = services.BuildServiceProvider();
             var mapper = provider.GetRequiredService<IOctoMapper>();
 
-            var destination = mapper.Map<Order, OrderDto>(new Order
+            var destination = mapper.Map<NullCollectionOptionOrder, NullCollectionOptionOrderDto>(new NullCollectionOptionOrder
             {
                 Items = null
             });
 
             Assert.NotNull(destination.Items);
             Assert.Empty(destination.Items);
+        }
+
+        [Fact]
+        public void Map_Uses_Member_Rule_To_Assign_Empty_Collection_When_Source_Is_Null()
+        {
+            var provider = CreateProvider<EmptyCollectionMemberProfile>();
+            var mapper = provider.GetRequiredService<IOctoMapper>();
+
+            var destination = mapper.Map<EmptyCollectionMemberOrder, EmptyCollectionMemberOrderDto>(new EmptyCollectionMemberOrder
+            {
+                Items = null
+            });
+
+            Assert.NotNull(destination.Items);
+            Assert.Empty(destination.Items);
+        }
+
+        [Fact]
+        public void Map_Uses_Member_Rule_To_Preserve_Null_Collection_When_Global_Null_Collections_Are_Disabled()
+        {
+            var services = new ServiceCollection();
+            services.AddOctoMap(
+                options => options.AllowNullCollections = false,
+                typeof(AllowNullCollectionMemberProfile).Assembly);
+            var provider = services.BuildServiceProvider();
+            var mapper = provider.GetRequiredService<IOctoMapper>();
+
+            var destination = mapper.Map<AllowNullCollectionMemberOrder, AllowNullCollectionMemberOrderDto>(new AllowNullCollectionMemberOrder
+            {
+                Items = null
+            });
+
+            Assert.Null(destination.Items);
         }
 
         [Fact]
@@ -176,12 +209,74 @@ namespace OctoMap.Tests
             }
         }
 
+        public sealed class EmptyCollectionMemberProfile : OctoMapProfile
+        {
+            public override void Configure(IOctoMapConfigurationBuilder builder)
+            {
+                builder.CreateMap<EmptyCollectionMemberOrder, EmptyCollectionMemberOrderDto>()
+                    .ForMember(x => x.Items, x => x.UseEmptyCollectionWhenNull());
+                builder.CreateMap<OrderItem, OrderItemDto>()
+                    .ForMember(x => x.Label, x => x.MapFrom(s => s.Sku + " x " + s.Quantity));
+            }
+        }
+
+        public sealed class AllowNullCollectionMemberProfile : OctoMapProfile
+        {
+            public override void Configure(IOctoMapConfigurationBuilder builder)
+            {
+                builder.CreateMap<AllowNullCollectionMemberOrder, AllowNullCollectionMemberOrderDto>()
+                    .ForMember(x => x.Items, x => x.AllowNullCollection(true));
+                builder.CreateMap<OrderItem, OrderItemDto>()
+                    .ForMember(x => x.Label, x => x.MapFrom(s => s.Sku + " x " + s.Quantity));
+            }
+        }
+
+        public sealed class NullCollectionOptionProfile : OctoMapProfile
+        {
+            public override void Configure(IOctoMapConfigurationBuilder builder)
+            {
+                builder.CreateMap<NullCollectionOptionOrder, NullCollectionOptionOrderDto>();
+                builder.CreateMap<OrderItem, OrderItemDto>()
+                    .ForMember(x => x.Label, x => x.MapFrom(s => s.Sku + " x " + s.Quantity));
+            }
+        }
+
         public sealed class Order
         {
             public List<OrderItem> Items { get; set; }
         }
 
         public sealed class OrderDto
+        {
+            public List<OrderItemDto> Items { get; set; }
+        }
+
+        public sealed class EmptyCollectionMemberOrder
+        {
+            public List<OrderItem> Items { get; set; }
+        }
+
+        public sealed class EmptyCollectionMemberOrderDto
+        {
+            public List<OrderItemDto> Items { get; set; }
+        }
+
+        public sealed class AllowNullCollectionMemberOrder
+        {
+            public List<OrderItem> Items { get; set; }
+        }
+
+        public sealed class AllowNullCollectionMemberOrderDto
+        {
+            public List<OrderItemDto> Items { get; set; }
+        }
+
+        public sealed class NullCollectionOptionOrder
+        {
+            public List<OrderItem> Items { get; set; }
+        }
+
+        public sealed class NullCollectionOptionOrderDto
         {
             public List<OrderItemDto> Items { get; set; }
         }
