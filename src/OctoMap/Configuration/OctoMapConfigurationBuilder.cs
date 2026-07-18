@@ -1,5 +1,6 @@
 namespace OctoMap.Configuration
 {
+    using System.Linq.Expressions;
     using OctoMap.Diagnostics;
     using OctoMap.Planning;
     using OctoMap.Validation;
@@ -10,6 +11,7 @@ namespace OctoMap.Configuration
     internal sealed class OctoMapConfigurationBuilder : IOctoMapConfigurationBuilder
     {
         private readonly Dictionary<MapKey, TypeMap> _maps = new();
+        private readonly Dictionary<MapKey, TypeConversionMap> _conversions = new();
         private readonly List<MultiSourceTypeMap> _multiMaps = new();
 
         /// <summary>
@@ -21,6 +23,11 @@ namespace OctoMap.Configuration
         /// Gets the configured multi-source maps.
         /// </summary>
         internal IReadOnlyDictionary<MapKey, MultiSourceTypeMap> MultiMaps => BuildMultiMaps();
+
+        /// <summary>
+        /// Gets the configured global conversions.
+        /// </summary>
+        internal ITypeConversionRegistry TypeConversions => new TypeConversionRegistry(_conversions.Values);
 
         /// <inheritdoc/>
         public IMapExpression<TSource, TDestination> CreateMap<TSource, TDestination>()
@@ -34,6 +41,22 @@ namespace OctoMap.Configuration
         {
             GetOrCreateMap(sourceType, destinationType);
         }
+
+        /// <inheritdoc/>
+        public void CreateConverter<TSource, TDestination>(Expression<Func<TSource, TDestination>> conversionExpression)
+        {
+            if (conversionExpression == null)
+            {
+                throw new ArgumentNullException(nameof(conversionExpression));
+            }
+
+            AddConversion(new TypeConversionMap(typeof(TSource), typeof(TDestination), conversionExpression, null));
+        }
+
+        /// <inheritdoc/>
+        public void CreateConverter<TConverter, TSource, TDestination>()
+            where TConverter : IValueConverter<TSource, TDestination>
+            => AddConversion(new TypeConversionMap(typeof(TSource), typeof(TDestination), null, typeof(TConverter)));
 
         /// <summary>
         /// Gets or creates a configured type map.
@@ -69,9 +92,14 @@ namespace OctoMap.Configuration
             => new OctoMapConfiguration(
                 Maps,
                 MultiMaps,
-                new OctoMapValidator(),
-                new ConventionMappingPlanBuilder(new OctoMapOptions()),
+                new OctoMapValidator(TypeConversions),
+                new ConventionMappingPlanBuilder(new OctoMapOptions(), TypeConversions),
                 new ConventionMappingPlanDescriber());
+
+        private void AddConversion(TypeConversionMap conversion)
+        {
+            _conversions[new MapKey(conversion.SourceType, conversion.DestinationType)] = conversion;
+        }
 
         private IReadOnlyDictionary<MapKey, MultiSourceTypeMap> BuildMultiMaps()
         {

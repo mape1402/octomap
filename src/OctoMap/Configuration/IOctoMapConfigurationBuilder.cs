@@ -26,5 +26,22 @@ namespace OctoMap
         /// <param name="sourceType">The source type.</param>
         /// <param name="destinationType">The destination type.</param>
         void CreateMap(Type sourceType, Type destinationType);
+
+        /// <summary>
+        /// Creates a projectable global type conversion.
+        /// </summary>
+        /// <typeparam name="TSource">The source type.</typeparam>
+        /// <typeparam name="TDestination">The destination type.</typeparam>
+        /// <param name="conversionExpression">The conversion expression.</param>
+        void CreateConverter<TSource, TDestination>(System.Linq.Expressions.Expression<Func<TSource, TDestination>> conversionExpression);
+
+        /// <summary>
+        /// Creates a runtime global type conversion backed by a DI value converter.
+        /// </summary>
+        /// <typeparam name="TConverter">The converter type.</typeparam>
+        /// <typeparam name="TSource">The source type.</typeparam>
+        /// <typeparam name="TDestination">The destination type.</typeparam>
+        void CreateConverter<TConverter, TSource, TDestination>()
+            where TConverter : IValueConverter<TSource, TDestination>;
     }
 }

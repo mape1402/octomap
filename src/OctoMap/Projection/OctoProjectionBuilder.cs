@@ -106,10 +106,15 @@ namespace OctoMap.Projection
                 var arguments = plan.Construction.Parameters
                     .Select<ConstructorParameterPlan, Expression>(parameter =>
                     {
-                        var value = Expression.Property(source, parameter.SourceProperty);
-                        return value.Type == parameter.Parameter.ParameterType
-                            ? value
-                            : Expression.Convert(value, parameter.Parameter.ParameterType);
+                    Expression value = Expression.Property(source, parameter.SourceProperty);
+                    if (parameter.TypeConversion != null)
+                    {
+                        value = ApplyTypeConversion(value, parameter.TypeConversion, parameter.Parameter.Name);
+                    }
+
+                    return value.Type == parameter.Parameter.ParameterType
+                        ? value
+                        : Expression.Convert(value, parameter.Parameter.ParameterType);
                     });
 
                 return Expression.New(plan.Construction.Constructor, arguments);
@@ -176,6 +181,11 @@ namespace OctoMap.Projection
                 value = Expression.Coalesce(value, Expression.Constant(assignment.NullSubstitute, value.Type));
             }
 
+            if (assignment.TypeConversion != null)
+            {
+                value = ApplyTypeConversion(value, assignment.TypeConversion, assignment.DestinationProperty.Name);
+            }
+
             return value.Type == assignment.DestinationProperty.PropertyType
                 ? value
                 : Expression.Convert(value, assignment.DestinationProperty.PropertyType);
@@ -192,6 +202,11 @@ namespace OctoMap.Projection
                 {
                     nullChecks.Add(Expression.NotEqual(current, Expression.Constant(null, current.Type)));
                 }
+            }
+
+            if (assignment.TypeConversion != null)
+            {
+                current = ApplyTypeConversion(current, assignment.TypeConversion, assignment.DestinationProperty.Name);
             }
 
             var finalValue = current.Type == assignment.DestinationProperty.PropertyType
@@ -220,8 +235,18 @@ namespace OctoMap.Projection
             return new TypeMap(sourceType, destinationType, true);
         }
 
-        private static Expression ReplaceParameter(Expression expression, ParameterExpression from, ParameterExpression to)
+        private static Expression ReplaceParameter(Expression expression, ParameterExpression from, Expression to)
             => new ParameterReplacementVisitor(from, to).Visit(expression);
+
+        private static Expression ApplyTypeConversion(Expression value, TypeConversionMap typeConversion, string memberName)
+        {
+            if (typeConversion.UsesServiceConverter)
+            {
+                throw new NotSupportedException($"Member '{memberName}' cannot be projected because DI type converters are runtime-only.");
+            }
+
+            return ReplaceParameter(typeConversion.ConversionExpression.Body, typeConversion.ConversionExpression.Parameters[0], value);
+        }
 
         private static bool CanBeNull(Type type)
             => !type.IsValueType || Nullable.GetUnderlyingType(type) != null;
@@ -229,9 +254,9 @@ namespace OctoMap.Projection
         private sealed class ParameterReplacementVisitor : ExpressionVisitor
         {
             private readonly ParameterExpression _from;
-            private readonly ParameterExpression _to;
+            private readonly Expression _to;
 
-            public ParameterReplacementVisitor(ParameterExpression from, ParameterExpression to)
+            public ParameterReplacementVisitor(ParameterExpression from, Expression to)
             {
                 _from = from;
                 _to = to;

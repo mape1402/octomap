@@ -5,6 +5,7 @@ using DynaBee.FluentApi.Body;
 using DynaBee.FluentApi.DependencyInjection;
 using DynaBee.FluentApi.Invocation;
 using Microsoft.Extensions.DependencyInjection;
+using OctoMap.Configuration;
 using OctoMap.Planning;
 
 namespace OctoMap.Generation.Dynabee
@@ -132,7 +133,7 @@ namespace OctoMap.Generation.Dynabee
             }
             else
             {
-                body.Assign(destination, CreateDestination(body, sources, plan));
+                body.Assign(destination, CreateDestination(body, sources, context, plan));
             }
 
             foreach (var assignment in plan.Assignments)
@@ -247,6 +248,7 @@ namespace OctoMap.Generation.Dynabee
         private static IBeeValueExpression CreateDestination(
             IBeeMethodBodyBuilder body,
             IReadOnlyList<IBeeValueExpression> sources,
+            IBeeValueExpression context,
             MappingPlan plan)
         {
             if (plan.Construction?.ConstructionExpression != null)
@@ -265,7 +267,12 @@ namespace OctoMap.Generation.Dynabee
                 var arguments = plan.Construction.Parameters
                     .Select(parameter =>
                     {
-                        var value = body.Property(source, parameter.SourceProperty.Name);
+                        IBeeValueExpression value = body.Property(source, parameter.SourceProperty.Name);
+                        if (parameter.TypeConversion != null)
+                        {
+                            value = ApplyTypeConversion(body, value, context, parameter.TypeConversion);
+                        }
+
                         return value.Type == parameter.Parameter.ParameterType
                             ? value
                             : body.Convert(value, parameter.Parameter.ParameterType);
@@ -328,6 +335,11 @@ namespace OctoMap.Generation.Dynabee
                 value = ApplyNullSubstitute(body, value, assignment);
             }
 
+            if (assignment.TypeConversion != null)
+            {
+                value = ApplyTypeConversion(body, value, context, assignment.TypeConversion);
+            }
+
             return value.Type == assignment.DestinationProperty.PropertyType
                 ? value
                 : body.Convert(value, assignment.DestinationProperty.PropertyType);
@@ -377,6 +389,32 @@ namespace OctoMap.Generation.Dynabee
             var convertMethod = converterContract.GetMethod(nameof(IValueConverter<object, object>.Convert));
 
             return body.Call(converter, convertMethod, sourceValue, context);
+        }
+
+        private static IBeeValueExpression ApplyTypeConversion(
+            IBeeMethodBodyBuilder body,
+            IBeeValueExpression value,
+            IBeeValueExpression context,
+            TypeConversionMap typeConversion)
+        {
+            if (typeConversion.UsesServiceConverter)
+            {
+                var services = body.Property(context, nameof(IMapContext.Services));
+                var converter = body.StaticCall(GetRequiredServiceMethod(typeConversion.ConverterType), services);
+                var converterContract = typeof(IValueConverter<,>).MakeGenericType(
+                    typeConversion.SourceType,
+                    typeConversion.DestinationType);
+                var convertMethod = converterContract.GetMethod(nameof(IValueConverter<object, object>.Convert));
+
+                return body.Call(converter, convertMethod, value, context);
+            }
+
+            return BuildExpression(
+                body,
+                new[] { value },
+                typeConversion.ConversionExpression.Body,
+                typeConversion.ConversionExpression.Parameters[0],
+                0);
         }
 
         private static IBeeValueExpression BuildCollectionMapValue(

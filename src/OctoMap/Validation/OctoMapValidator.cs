@@ -9,6 +9,17 @@ namespace OctoMap.Validation
     /// </summary>
     internal sealed class OctoMapValidator : IOctoMapValidator
     {
+        private readonly ITypeConversionRegistry _typeConversions;
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="OctoMapValidator"/> class.
+        /// </summary>
+        /// <param name="typeConversions">The type conversion registry.</param>
+        public OctoMapValidator(ITypeConversionRegistry typeConversions)
+        {
+            _typeConversions = typeConversions ?? throw new ArgumentNullException(nameof(typeConversions));
+        }
+
         /// <inheritdoc/>
         public OctoMapValidationReport Validate(IReadOnlyCollection<ITypeMap> maps)
         {
@@ -26,7 +37,7 @@ namespace OctoMap.Validation
             return new OctoMapValidationReport(issues);
         }
 
-        private static void ValidateMap(ITypeMap map, List<OctoMapValidationIssue> issues)
+        private void ValidateMap(ITypeMap map, List<OctoMapValidationIssue> issues)
         {
             if (map is not TypeMap typeMap)
             {
@@ -48,9 +59,11 @@ namespace OctoMap.Validation
             {
                 ValidateMemberMap(map, memberMap, issues);
             }
+
+            ValidateConventionMemberConversions(typeMap, issues);
         }
 
-        private static void ValidateDestinationCreation(ITypeMap map, List<OctoMapValidationIssue> issues)
+        private void ValidateDestinationCreation(ITypeMap map, List<OctoMapValidationIssue> issues)
         {
             if (map.DestinationType.IsAbstract || map.DestinationType.IsInterface)
             {
@@ -98,7 +111,7 @@ namespace OctoMap.Validation
             }
         }
 
-        private static void ValidateMemberMap(ITypeMap map, MemberMap memberMap, List<OctoMapValidationIssue> issues)
+        private void ValidateMemberMap(ITypeMap map, MemberMap memberMap, List<OctoMapValidationIssue> issues)
         {
             if (memberMap.IsIgnored)
             {
@@ -115,9 +128,10 @@ namespace OctoMap.Validation
             if (memberMap.SourceExpression != null)
             {
                 ValidateExpression(map, memberMap, memberMap.SourceExpression.Body, memberMap.SourceExpression.Parameters[0], issues);
-                if (!memberMap.DestinationProperty.PropertyType.IsAssignableFrom(memberMap.SourceExpression.Body.Type))
+                if (!memberMap.DestinationProperty.PropertyType.IsAssignableFrom(memberMap.SourceExpression.Body.Type)
+                    && !_typeConversions.TryFind(memberMap.SourceExpression.Body.Type, memberMap.DestinationProperty.PropertyType, out _))
                 {
-                    issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"MapFrom expression result type '{memberMap.SourceExpression.Body.Type.FullName}' cannot be assigned to destination member '{memberMap.DestinationProperty.Name}' of type '{memberMap.DestinationProperty.PropertyType.FullName}'."));
+                    issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"No type converter is registered for MapFrom result type '{memberMap.SourceExpression.Body.Type.FullName}' to destination member '{memberMap.DestinationProperty.Name}' of type '{memberMap.DestinationProperty.PropertyType.FullName}'."));
                 }
             }
 
@@ -322,7 +336,7 @@ namespace OctoMap.Validation
             }
         }
 
-        private static void ValidateMultiSourceMap(MultiSourceTypeMap map, List<OctoMapValidationIssue> issues)
+        private void ValidateMultiSourceMap(MultiSourceTypeMap map, List<OctoMapValidationIssue> issues)
         {
             if (map.SourceMaps.Count == 0)
             {
@@ -365,9 +379,10 @@ namespace OctoMap.Validation
                 }
 
                 ValidateMultiSourceExpression(map, memberMap, memberMap.SourceExpression.Body, memberMap.SourceExpression.Parameters[0], issues);
-                if (!memberMap.DestinationProperty.PropertyType.IsAssignableFrom(memberMap.SourceExpression.Body.Type))
+                if (!memberMap.DestinationProperty.PropertyType.IsAssignableFrom(memberMap.SourceExpression.Body.Type)
+                    && !_typeConversions.TryFind(memberMap.SourceExpression.Body.Type, memberMap.DestinationProperty.PropertyType, out _))
                 {
-                    issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"MapFrom expression result type '{memberMap.SourceExpression.Body.Type.FullName}' cannot be assigned to destination member '{memberMap.DestinationProperty.Name}' of type '{memberMap.DestinationProperty.PropertyType.FullName}'."));
+                    issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"No type converter is registered for multi-source MapFrom result type '{memberMap.SourceExpression.Body.Type.FullName}' to destination member '{memberMap.DestinationProperty.Name}' of type '{memberMap.DestinationProperty.PropertyType.FullName}'."));
                 }
             }
         }
@@ -494,7 +509,7 @@ namespace OctoMap.Validation
                 && expression.Method.IsGenericMethod
                 && expression.Method.GetGenericMethodDefinition() == typeof(IMultiSourceMapContext).GetMethod(nameof(IMultiSourceMapContext.Get));
 
-        private static bool CanResolveConventionConstructor(TypeMap map)
+        private bool CanResolveConventionConstructor(TypeMap map)
         {
             var sourceProperties = map.SourceType
                 .GetProperties(BindingFlags.Instance | BindingFlags.Public)
@@ -509,7 +524,8 @@ namespace OctoMap.Validation
                     return parameters.Length > 0
                         && parameters.All(parameter =>
                             sourceProperties.TryGetValue(parameter.Name, out var sourceProperty)
-                            && parameter.ParameterType.IsAssignableFrom(sourceProperty.PropertyType));
+                            && (parameter.ParameterType.IsAssignableFrom(sourceProperty.PropertyType)
+                                || _typeConversions.TryFind(sourceProperty.PropertyType, parameter.ParameterType, out _)));
                 });
         }
 
@@ -599,6 +615,62 @@ namespace OctoMap.Validation
 
         private static bool CanWrite(PropertyInfo property)
             => property.CanWrite && property.SetMethod != null && property.SetMethod.IsPublic;
+
+        private void ValidateConventionMemberConversions(TypeMap map, List<OctoMapValidationIssue> issues)
+        {
+            var sourceProperties = map.SourceType
+                .GetProperties(BindingFlags.Instance | BindingFlags.Public)
+                .Where(x => x.CanRead && x.GetMethod != null)
+                .ToDictionary(x => x.Name, StringComparer.OrdinalIgnoreCase);
+            var configuredMembers = map.MemberMaps.Values
+                .Where(x => !x.UsesDestinationPath)
+                .ToDictionary(x => x.DestinationProperty.Name, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var destinationProperty in map.DestinationType.GetProperties(BindingFlags.Instance | BindingFlags.Public).Where(CanWrite))
+            {
+                if (configuredMembers.ContainsKey(destinationProperty.Name)
+                    || !sourceProperties.TryGetValue(destinationProperty.Name, out var sourceProperty)
+                    || destinationProperty.PropertyType.IsAssignableFrom(sourceProperty.PropertyType)
+                    || CanUseNestedMap(sourceProperty.PropertyType, destinationProperty.PropertyType)
+                    || AreSupportedCollections(sourceProperty.PropertyType, destinationProperty.PropertyType)
+                    || _typeConversions.TryFind(sourceProperty.PropertyType, destinationProperty.PropertyType, out _))
+                {
+                    continue;
+                }
+
+                issues.Add(CreateIssue(
+                    map,
+                    destinationProperty.Name,
+                    $"No type converter is registered for source member '{sourceProperty.Name}' of type '{sourceProperty.PropertyType.FullName}' to destination member '{destinationProperty.Name}' of type '{destinationProperty.PropertyType.FullName}'."));
+            }
+        }
+
+        private static bool CanUseNestedMap(Type sourceType, Type destinationType)
+        {
+            if (sourceType == typeof(string) || destinationType == typeof(string))
+            {
+                return false;
+            }
+
+            if (sourceType.IsValueType || destinationType.IsValueType)
+            {
+                return false;
+            }
+
+            if (typeof(System.Collections.IEnumerable).IsAssignableFrom(sourceType)
+                || typeof(System.Collections.IEnumerable).IsAssignableFrom(destinationType))
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool AreSupportedCollections(Type sourceType, Type destinationType)
+            => typeof(System.Collections.IEnumerable).IsAssignableFrom(sourceType)
+                && sourceType != typeof(string)
+                && typeof(System.Collections.IEnumerable).IsAssignableFrom(destinationType)
+                && destinationType != typeof(string);
 
         private static void ValidateResolver(ITypeMap map, MemberMap memberMap, List<OctoMapValidationIssue> issues)
         {

@@ -36,6 +36,7 @@ These capabilities are already implemented or have an initial working version:
 - first-pass runtime conditional mapping
 - first-pass existing destination mapping for single-source maps
 - first-pass `IgnoreNullSourceValues` and per-member `IgnoreNullSourceValue(...)`
+- first-pass global type conversion system
 - README, API docs, architecture docs, sample project, and unit tests
 
 ## Core Principles
@@ -280,19 +281,30 @@ builder.CreateMap<PatchOrderDto, Order>()
 
 ### 7. Type Conversion System
 
-OctoMap needs global and reusable conversion rules.
+OctoMap has a first-pass global reusable conversion system.
 
-Target features:
+Implemented:
 
-- global type converters
-- primitive conversions
-- nullable conversions
-- enum-to-string
-- string-to-enum
+- projectable global expression converters
+- runtime global DI converters
+- numeric conversions
+- nullable wrap and unwrap conversions
+- enum-to-string and string-to-enum
 - string-to-guid
-- string-to-date/time
-- culture-aware conversions
-- value transformers
+- string parse conversions for primitive and date/time types
+- primitive/date/time/Guid-to-string conversions
+- conversion support for convention members, `MapFrom(...)`, flattening, and convention constructor parameters
+- projection support for expression converters
+- validation diagnostics when no converter exists
+
+Remaining target features:
+
+- richer culture-aware conversion configuration
+- global value transformers
+- collection element conversions
+- map/profile scoped converter registration
+- converter priority and override diagnostics
+- projection translation safeguards for provider-specific parse methods
 
 Target API examples:
 

@@ -9,14 +9,17 @@ namespace OctoMap.Planning
     internal sealed class ConventionMappingPlanBuilder : IMappingPlanBuilder
     {
         private readonly OctoMapOptions _options;
+        private readonly ITypeConversionRegistry _typeConversions;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ConventionMappingPlanBuilder"/> class.
         /// </summary>
         /// <param name="options">The OctoMap options.</param>
-        public ConventionMappingPlanBuilder(OctoMapOptions options)
+        /// <param name="typeConversions">The type conversion registry.</param>
+        public ConventionMappingPlanBuilder(OctoMapOptions options, ITypeConversionRegistry typeConversions)
         {
             _options = options ?? throw new ArgumentNullException(nameof(options));
+            _typeConversions = typeConversions ?? throw new ArgumentNullException(nameof(typeConversions));
         }
 
         /// <inheritdoc/>
@@ -124,11 +127,18 @@ namespace OctoMap.Planning
 
                 if (!destinationProperty.PropertyType.IsAssignableFrom(sourceProperty.PropertyType))
                 {
+                    if (_typeConversions.TryFind(sourceProperty.PropertyType, destinationProperty.PropertyType, out var typeConversion))
+                    {
+                        assignments.Add(CreateAssignment(destinationProperty, sourceProperty, null, configuredMemberMap, typeConversion));
+                        continue;
+                    }
+
                     if (CanUseNestedMap(sourceProperty.PropertyType, destinationProperty.PropertyType))
                     {
                         assignments.Add(new MemberAssignmentPlan(
                             destinationProperty,
                             sourceProperty,
+                            null,
                             null,
                             null,
                             null,
@@ -176,6 +186,19 @@ namespace OctoMap.Planning
             PropertyInfo sourceProperty,
             System.Linq.Expressions.LambdaExpression sourceExpression,
             MemberMap memberMap)
+            => CreateAssignment(
+                destinationProperty,
+                sourceProperty,
+                sourceExpression,
+                memberMap,
+                ResolveConversion(sourceProperty, sourceExpression, memberMap, destinationProperty.PropertyType));
+
+        private MemberAssignmentPlan CreateAssignment(
+            PropertyInfo destinationProperty,
+            PropertyInfo sourceProperty,
+            System.Linq.Expressions.LambdaExpression sourceExpression,
+            MemberMap memberMap,
+            TypeConversionMap typeConversion)
             => new(
                 destinationProperty,
                 sourceProperty,
@@ -183,6 +206,7 @@ namespace OctoMap.Planning
                 memberMap?.ResolverType,
                 memberMap?.ConverterType,
                 memberMap?.ConverterSourceExpression,
+                typeConversion,
                 memberMap?.PreConditionExpression,
                 memberMap?.ConditionExpression,
                 false,
@@ -199,6 +223,28 @@ namespace OctoMap.Planning
                 0,
                 null,
                 memberMap?.DestinationPath);
+
+        private TypeConversionMap ResolveConversion(
+            PropertyInfo sourceProperty,
+            System.Linq.Expressions.LambdaExpression sourceExpression,
+            MemberMap memberMap,
+            Type destinationType)
+        {
+            if (memberMap?.ResolverType != null || memberMap?.ConverterType != null || memberMap?.HasConstantValue == true)
+            {
+                return null;
+            }
+
+            var sourceType = sourceExpression?.Body.Type ?? sourceProperty?.PropertyType;
+            if (sourceType == null || destinationType.IsAssignableFrom(sourceType))
+            {
+                return null;
+            }
+
+            return _typeConversions.TryFind(sourceType, destinationType, out var conversion)
+                ? conversion
+                : null;
+        }
 
         private MappingPlan BuildMultiSource(MultiSourceTypeMap typeMap)
         {
@@ -239,6 +285,7 @@ namespace OctoMap.Planning
                     null,
                     null,
                     null,
+                    ResolveConversion(null, memberMap.SourceExpression, null, memberMap.DestinationProperty.PropertyType),
                     null,
                     null,
                     false,
@@ -258,7 +305,7 @@ namespace OctoMap.Planning
             return new MappingPlan(typeMap.SourceTypes, typeMap.DestinationType, assignments);
         }
 
-        private static DestinationConstructionPlan CreateConstructionPlan(
+        private DestinationConstructionPlan CreateConstructionPlan(
             Type sourceType,
             Type destinationType,
             IReadOnlyDictionary<string, PropertyInfo> sourceProperties,
@@ -302,6 +349,7 @@ namespace OctoMap.Planning
                 resolverType: memberMap?.ResolverType,
                 converterType: memberMap?.ConverterType,
                 converterSourceExpression: memberMap?.ConverterSourceExpression,
+                typeConversion: ResolveConversion(sourceProperty, sourceExpression, memberMap, destinationProperty.PropertyType),
                 preConditionExpression: memberMap?.PreConditionExpression,
                 conditionExpression: memberMap?.ConditionExpression,
                 useNestedMap: false,
@@ -337,7 +385,7 @@ namespace OctoMap.Planning
             }
         }
 
-        private static void EnsureDestinationCanBeCreated(
+        private void EnsureDestinationCanBeCreated(
             Type sourceType,
             Type destinationType,
             IReadOnlyDictionary<string, PropertyInfo> sourceProperties,
@@ -359,7 +407,7 @@ namespace OctoMap.Planning
             }
         }
 
-        private static bool TrySelectConventionConstructor(
+        private bool TrySelectConventionConstructor(
             Type destinationType,
             IReadOnlyDictionary<string, PropertyInfo> sourceProperties,
             out ConstructorInfo constructor,
@@ -379,14 +427,21 @@ namespace OctoMap.Planning
                 var canUseConstructor = true;
                 foreach (var parameter in parameters)
                 {
-                    if (!sourceProperties.TryGetValue(parameter.Name, out var sourceProperty)
-                        || !parameter.ParameterType.IsAssignableFrom(sourceProperty.PropertyType))
+                    if (!sourceProperties.TryGetValue(parameter.Name, out var sourceProperty))
                     {
                         canUseConstructor = false;
                         break;
                     }
 
-                    plans.Add(new ConstructorParameterPlan(parameter, sourceProperty));
+                    TypeConversionMap typeConversion = null;
+                    if (!parameter.ParameterType.IsAssignableFrom(sourceProperty.PropertyType)
+                        && !_typeConversions.TryFind(sourceProperty.PropertyType, parameter.ParameterType, out typeConversion))
+                    {
+                        canUseConstructor = false;
+                        break;
+                    }
+
+                    plans.Add(new ConstructorParameterPlan(parameter, sourceProperty, typeConversion));
                 }
 
                 if (canUseConstructor)
@@ -460,6 +515,7 @@ namespace OctoMap.Planning
                 null,
                 null,
                 null,
+                null,
                 memberMap?.PreConditionExpression,
                 memberMap?.ConditionExpression,
                 false,
@@ -489,7 +545,9 @@ namespace OctoMap.Planning
             }
 
             var sourceValueType = sourcePath[^1].PropertyType;
-            if (!destinationProperty.PropertyType.IsAssignableFrom(sourceValueType))
+            TypeConversionMap typeConversion = null;
+            if (!destinationProperty.PropertyType.IsAssignableFrom(sourceValueType)
+                && !_typeConversions.TryFind(sourceValueType, destinationProperty.PropertyType, out typeConversion))
             {
                 return false;
             }
@@ -501,6 +559,7 @@ namespace OctoMap.Planning
                 null,
                 null,
                 null,
+                typeConversion,
                 null,
                 null,
                 false,

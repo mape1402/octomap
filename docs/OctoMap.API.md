@@ -189,6 +189,36 @@ When enabled, `mapper.Map<TDestination>(source)` can create and cache a conventi
 
 Runtime implicit maps do not apply to multi-source maps.
 
+## Global Type Conversions
+
+```csharp
+public interface IOctoMapConfigurationBuilder
+{
+    void CreateConverter<TSource, TDestination>(
+        Expression<Func<TSource, TDestination>> conversionExpression);
+
+    void CreateConverter<TConverter, TSource, TDestination>()
+        where TConverter : IValueConverter<TSource, TDestination>;
+}
+```
+
+Global converters are used when matching source and destination members have different types.
+
+```csharp
+builder.CreateConverter<string, SkuCode>(x => new SkuCode(x.ToUpperInvariant()));
+builder.CreateMap<Product, ProductCodeDto>();
+```
+
+Runtime DI converters use the same `IValueConverter<TSourceMember, TDestinationMember>` contract as member converters.
+
+```csharp
+builder.CreateConverter<MoneyTextConverter, decimal, MoneyText>();
+```
+
+Built-in conversions include numeric conversions, nullable wrap/unwrap conversions, enum/string conversions, `string -> Guid`, string parse conversions for date/time and primitive types, and primitive/date/time/Guid-to-string conversions.
+
+Expression converters can be used in runtime mapping and projections. DI converters are runtime-only because LINQ providers cannot translate service resolution.
+
 ## Existing Destination Mapping
 
 ```csharp

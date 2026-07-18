@@ -1,5 +1,6 @@
 using System.Linq.Expressions;
 using System.Reflection;
+using OctoMap.Configuration;
 
 namespace OctoMap.Planning
 {
@@ -58,10 +59,12 @@ namespace OctoMap.Planning
         /// </summary>
         /// <param name="parameter">The destination constructor parameter.</param>
         /// <param name="sourceProperty">The matched source property.</param>
-        public ConstructorParameterPlan(ParameterInfo parameter, PropertyInfo sourceProperty)
+        /// <param name="typeConversion">The optional global type conversion.</param>
+        public ConstructorParameterPlan(ParameterInfo parameter, PropertyInfo sourceProperty, TypeConversionMap typeConversion = null)
         {
             Parameter = parameter ?? throw new ArgumentNullException(nameof(parameter));
             SourceProperty = sourceProperty ?? throw new ArgumentNullException(nameof(sourceProperty));
+            TypeConversion = typeConversion;
         }
 
         /// <summary>
@@ -73,5 +76,10 @@ namespace OctoMap.Planning
         /// Gets the matched source property.
         /// </summary>
         public PropertyInfo SourceProperty { get; }
+
+        /// <summary>
+        /// Gets the optional global type conversion.
+        /// </summary>
+        public TypeConversionMap TypeConversion { get; }
     }
 }

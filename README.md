@@ -223,6 +223,36 @@ builder.CreateMap<CustomerPatch, CustomerDto>()
 
 `NullSubstitute(...)` runs before the null-skip check, so an explicit substitute value is assigned even when null source values are ignored.
 
+## Global Type Conversions
+
+OctoMap can convert matching source and destination members when the member names match but their types differ.
+
+Built-in conversions include:
+
+- numeric-to-numeric conversions
+- nullable wrap and unwrap conversions
+- enum-to-string and string-to-enum
+- string-to-`Guid`
+- string-to-date/time types supported by their `Parse(...)` APIs
+- primitive/date/time/Guid-to-string conversions
+
+Register reusable projectable conversions with an expression:
+
+```csharp
+builder.CreateConverter<string, SkuCode>(x => new SkuCode(x.ToUpperInvariant()));
+builder.CreateMap<Product, ProductCodeDto>();
+```
+
+Register runtime conversions through DI when conversion needs services:
+
+```csharp
+builder.CreateConverter<MoneyTextConverter, decimal, MoneyText>();
+```
+
+DI converters are resolved from `IMapContext.Services` on each map call, so scoped/transient/singleton lifetimes stay controlled by the application service provider.
+
+Expression converters can be used by `ProjectTo(...)`. DI converters are runtime-only and throw a clear projection error.
+
 ## DI-Based Value Converters
 
 Value converters transform one source member value into one destination member value. They are useful when the conversion depends on application services, formatting rules, localization, or domain policies.
@@ -705,6 +735,7 @@ Plan description: CustomerDto.Id <- Customer.Id
 Constructor map: 100 - Grace Hopper
 Implicit map: OCTO-001 - 49.95
 Reverse map: OCTO-001 - 49.95
+Global type converter map: OCTO-CODE
 Projection map: OCTO-PROJ - 19.95
 EF SQLite projection map: OCTO-SQLITE - 29.95
 Resolver, value converter, nested map, collection map, flattening: 700 - NEW - No description - Order #0700 is Created - 149.99 USD - Katherine Johnson - Katherine - 2 items

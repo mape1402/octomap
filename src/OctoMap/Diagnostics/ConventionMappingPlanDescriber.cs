@@ -1,3 +1,4 @@
+using OctoMap.Configuration;
 using OctoMap.Planning;
 
 namespace OctoMap.Diagnostics
@@ -39,6 +40,14 @@ namespace OctoMap.Diagnostics
                 return $"{assignment.ConverterType.Name}({GetExpressionDescription(assignment.ConverterSourceExpression, GetSourcePrefix(plan, assignment))})";
             }
 
+            if (assignment.TypeConversion != null)
+            {
+                var source = assignment.SourceExpression != null
+                    ? GetExpressionDescription(assignment.SourceExpression, GetSourcePrefix(plan, assignment))
+                    : $"{GetSourcePrefix(plan, assignment)}.{assignment.SourceProperty.Name}";
+                return $"{GetConversionDescription(assignment.TypeConversion)}({source})";
+            }
+
             if (assignment.HasConstantValue)
             {
                 return assignment.ConstantValue == null ? "null" : assignment.ConstantValue.ToString();
@@ -66,6 +75,11 @@ namespace OctoMap.Diagnostics
 
             return $"{GetSourcePrefix(plan, assignment)}.{assignment.SourceProperty.Name}";
         }
+
+        private static string GetConversionDescription(TypeConversionMap conversion)
+            => conversion.UsesServiceConverter
+                ? conversion.ConverterType.Name
+                : $"{conversion.SourceType.Name}->{conversion.DestinationType.Name}";
 
         private static string GetConditionDescription(MappingPlan plan, MemberAssignmentPlan assignment)
         {

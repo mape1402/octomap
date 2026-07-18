@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Linq.Expressions;
+using OctoMap.Configuration;
 
 namespace OctoMap.Planning
 {
@@ -96,7 +97,7 @@ namespace OctoMap.Planning
             object constantValue,
             bool hasNullSubstitute,
             object nullSubstitute)
-            : this(destinationProperty, sourceProperty, sourceExpression, null, null, null, null, null, false, CollectionShape.None, CollectionShape.None, null, null, true, hasConstantValue, constantValue, hasNullSubstitute, nullSubstitute, false, 0)
+            : this(destinationProperty, sourceProperty, sourceExpression, null, null, null, null, null, null, false, CollectionShape.None, CollectionShape.None, null, null, true, hasConstantValue, constantValue, hasNullSubstitute, nullSubstitute, false, 0)
         {
         }
 
@@ -109,6 +110,7 @@ namespace OctoMap.Planning
         /// <param name="resolverType">The resolver type.</param>
         /// <param name="converterType">The converter type.</param>
         /// <param name="converterSourceExpression">The converter source expression.</param>
+        /// <param name="typeConversion">The global type conversion.</param>
         /// <param name="preConditionExpression">The precondition expression.</param>
         /// <param name="conditionExpression">The assignment condition expression.</param>
         /// <param name="useNestedMap">A value indicating whether the assignment uses a nested map.</param>
@@ -132,6 +134,7 @@ namespace OctoMap.Planning
             Type resolverType,
             Type converterType,
             LambdaExpression converterSourceExpression,
+            TypeConversionMap typeConversion,
             LambdaExpression preConditionExpression,
             LambdaExpression conditionExpression,
             bool useNestedMap,
@@ -156,6 +159,7 @@ namespace OctoMap.Planning
             ResolverType = resolverType;
             ConverterType = converterType;
             ConverterSourceExpression = converterSourceExpression;
+            TypeConversion = typeConversion;
             PreConditionExpression = preConditionExpression;
             ConditionExpression = conditionExpression;
             UseNestedMap = useNestedMap;
@@ -197,6 +201,11 @@ namespace OctoMap.Planning
         /// Gets the converter source expression.
         /// </summary>
         public LambdaExpression ConverterSourceExpression { get; }
+
+        /// <summary>
+        /// Gets the global type conversion.
+        /// </summary>
+        public TypeConversionMap TypeConversion { get; }
 
         /// <summary>
         /// Gets the precondition expression.

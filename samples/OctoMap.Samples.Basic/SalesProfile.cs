@@ -10,6 +10,8 @@ namespace OctoMap.Samples.Basic
         /// <inheritdoc/>
         public override void Configure(IOctoMapConfigurationBuilder builder)
         {
+            builder.CreateConverter<string, SkuCode>(x => new SkuCode(x.ToUpperInvariant()));
+
             builder.CreateMap<Customer, CustomerDto>()
                 .ForMember(x => x.FullName, x => x.MapFrom(s => s.FirstName + " " + s.LastName))
                 .ForMember(x => x.InternalCode, x => x.Ignore());
@@ -22,6 +24,8 @@ namespace OctoMap.Samples.Basic
 
             builder.CreateMap<Product, ProductDto>()
                 .ReverseMap();
+
+            builder.CreateMap<Product, ProductCodeDto>();
 
             builder.CreateMap<OrderItem, OrderItemDto>()
                 .ForMember(x => x.Label, x => x.MapFrom(s => s.Sku + " x " + s.Quantity));

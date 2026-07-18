@@ -73,6 +73,13 @@ namespace OctoMap.Samples.Basic
             var reversedProduct = _mapper.Map<ProductDto, Product>(productDto);
             Console.WriteLine($"Reverse map: {reversedProduct.Sku} - {reversedProduct.Price}");
 
+            var productCodeDto = _mapper.Map<Product, ProductCodeDto>(new Product
+            {
+                Sku = "octo-code"
+            });
+
+            Console.WriteLine($"Global type converter map: {productCodeDto.Sku.Value}");
+
             var projectedProduct = new[]
             {
                 new Product

@@ -52,10 +52,12 @@ namespace OctoMap
             var configurationBuilder = BuildConfigurationBuilder(discovery.Discover(profileAssemblies), profileAssemblies);
             var maps = configurationBuilder.Maps;
             var multiMaps = configurationBuilder.MultiMaps;
+            var typeConversions = configurationBuilder.TypeConversions;
 
             services.AddSingleton(options);
             services.AddSingleton<IOctoMapProfileDiscovery, OctoMapProfileDiscovery>();
-            services.AddSingleton<IOctoMapValidator, OctoMapValidator>();
+            services.AddSingleton(typeConversions);
+            services.AddSingleton<IOctoMapValidator>(sp => new OctoMapValidator(sp.GetRequiredService<ITypeConversionRegistry>()));
             services.AddSingleton<IMappingPlanBuilder, ConventionMappingPlanBuilder>();
             services.TryAddSingleton<IMappingPlanDescriber, ConventionMappingPlanDescriber>();
             services.AddSingleton(sp => new OctoMapConfiguration(
