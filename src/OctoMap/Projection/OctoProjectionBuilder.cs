@@ -160,7 +160,7 @@ namespace OctoMap.Projection
 
             if (assignment.UseCollectionMap)
             {
-                throw new NotSupportedException($"Member '{assignment.DestinationProperty.Name}' cannot be projected because collection projection is not supported yet.");
+                return BuildCollectionExpression(assignment, source);
             }
 
             Expression value;
@@ -201,6 +201,89 @@ namespace OctoMap.Projection
             return value.Type == assignment.DestinationProperty.PropertyType
                 ? value
                 : Expression.Convert(value, assignment.DestinationProperty.PropertyType);
+        }
+
+        private static Expression BuildCollectionExpression(MemberAssignmentPlan assignment, ParameterExpression source)
+        {
+            var sourceCollection = Expression.Property(source, assignment.SourceProperty);
+            var sourceItem = Expression.Parameter(assignment.SourceElementType, "item");
+            var destinationItem = BuildCollectionItemExpression(assignment, sourceItem);
+            var selector = Expression.Lambda(destinationItem, sourceItem);
+            var selected = Expression.Call(
+                GetEnumerableSelectMethod(assignment.SourceElementType, assignment.DestinationElementType),
+                sourceCollection,
+                selector);
+
+            var materialized = MaterializeCollectionExpression(assignment, selected);
+            var mapped = materialized.Type == assignment.DestinationProperty.PropertyType
+                ? materialized
+                : Expression.Convert(materialized, assignment.DestinationProperty.PropertyType);
+
+            if (!CanBeNull(sourceCollection.Type))
+            {
+                return mapped;
+            }
+
+            return Expression.Condition(
+                Expression.NotEqual(sourceCollection, Expression.Constant(null, sourceCollection.Type)),
+                mapped,
+                BuildNullCollectionExpression(assignment));
+        }
+
+        private static Expression BuildCollectionItemExpression(MemberAssignmentPlan assignment, ParameterExpression sourceItem)
+        {
+            if (assignment.DestinationElementType.IsAssignableFrom(assignment.SourceElementType))
+            {
+                return sourceItem.Type == assignment.DestinationElementType
+                    ? sourceItem
+                    : Expression.Convert(sourceItem, assignment.DestinationElementType);
+            }
+
+            if (assignment.ElementTypeConversion != null)
+            {
+                var converted = ApplyTypeConversion(sourceItem, assignment.ElementTypeConversion, assignment.DestinationProperty.Name);
+                return converted.Type == assignment.DestinationElementType
+                    ? converted
+                    : Expression.Convert(converted, assignment.DestinationElementType);
+            }
+
+            throw new NotSupportedException($"Member '{assignment.DestinationProperty.Name}' cannot be projected because nested collection element projection is not supported yet.");
+        }
+
+        private static Expression MaterializeCollectionExpression(MemberAssignmentPlan assignment, Expression selected)
+        {
+            if (assignment.DestinationCollectionShape == CollectionShape.Array)
+            {
+                return Expression.Call(GetEnumerableToArrayMethod(assignment.DestinationElementType), selected);
+            }
+
+            if (assignment.DestinationCollectionShape == CollectionShape.Set)
+            {
+                return Expression.New(
+                    GetHashSetEnumerableConstructor(assignment.DestinationElementType),
+                    selected);
+            }
+
+            return Expression.Call(GetEnumerableToListMethod(assignment.DestinationElementType), selected);
+        }
+
+        private static Expression BuildNullCollectionExpression(MemberAssignmentPlan assignment)
+        {
+            if (assignment.AllowNullCollection || assignment.IgnoreNullSourceValue)
+            {
+                return Expression.Default(assignment.DestinationProperty.PropertyType);
+            }
+
+            Expression empty = assignment.DestinationCollectionShape switch
+            {
+                CollectionShape.Array => Expression.Call(GetEnumerableToArrayMethod(assignment.DestinationElementType), Expression.Call(GetEnumerableEmptyMethod(assignment.DestinationElementType))),
+                CollectionShape.Set => Expression.New(typeof(HashSet<>).MakeGenericType(assignment.DestinationElementType)),
+                _ => Expression.New(typeof(List<>).MakeGenericType(assignment.DestinationElementType))
+            };
+
+            return empty.Type == assignment.DestinationProperty.PropertyType
+                ? empty
+                : Expression.Convert(empty, assignment.DestinationProperty.PropertyType);
         }
 
         private static Expression BuildFlattenedExpression(MemberAssignmentPlan assignment, ParameterExpression source)
@@ -262,6 +345,43 @@ namespace OctoMap.Projection
 
         private static bool CanBeNull(Type type)
             => !type.IsValueType || Nullable.GetUnderlyingType(type) != null;
+
+        private static MethodInfo GetEnumerableSelectMethod(Type sourceElementType, Type destinationElementType)
+            => typeof(Enumerable)
+                .GetMethods(BindingFlags.Public | BindingFlags.Static)
+                .Single(x => x.Name == nameof(Enumerable.Select)
+                    && x.IsGenericMethodDefinition
+                    && x.GetParameters().Length == 2
+                    && x.GetParameters()[1].ParameterType.GetGenericTypeDefinition() == typeof(Func<,>))
+                .MakeGenericMethod(sourceElementType, destinationElementType);
+
+        private static MethodInfo GetEnumerableToArrayMethod(Type elementType)
+            => typeof(Enumerable)
+                .GetMethods(BindingFlags.Public | BindingFlags.Static)
+                .Single(x => x.Name == nameof(Enumerable.ToArray)
+                    && x.IsGenericMethodDefinition
+                    && x.GetParameters().Length == 1)
+                .MakeGenericMethod(elementType);
+
+        private static MethodInfo GetEnumerableToListMethod(Type elementType)
+            => typeof(Enumerable)
+                .GetMethods(BindingFlags.Public | BindingFlags.Static)
+                .Single(x => x.Name == nameof(Enumerable.ToList)
+                    && x.IsGenericMethodDefinition
+                    && x.GetParameters().Length == 1)
+                .MakeGenericMethod(elementType);
+
+        private static MethodInfo GetEnumerableEmptyMethod(Type elementType)
+            => typeof(Enumerable)
+                .GetMethods(BindingFlags.Public | BindingFlags.Static)
+                .Single(x => x.Name == nameof(Enumerable.Empty)
+                    && x.IsGenericMethodDefinition)
+                .MakeGenericMethod(elementType);
+
+        private static ConstructorInfo GetHashSetEnumerableConstructor(Type elementType)
+            => typeof(HashSet<>)
+                .MakeGenericType(elementType)
+                .GetConstructor(new[] { typeof(IEnumerable<>).MakeGenericType(elementType) });
 
         private sealed class ParameterReplacementVisitor : ExpressionVisitor
         {

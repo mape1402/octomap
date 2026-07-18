@@ -432,7 +432,7 @@ namespace OctoMap.Generation.Dynabee
                 body.IsNull(sourceCollection),
                 whenTrue => whenTrue.Assign(
                     destinationCollection,
-                    assignment.AllowNullCollection
+                    assignment.IgnoreNullSourceValue || assignment.AllowNullCollection
                         ? body.Default(destinationCollectionType)
                         : CreateDestinationCollection(body, assignment, body.Constant(0))),
                 whenFalse =>
@@ -489,6 +489,8 @@ namespace OctoMap.Generation.Dynabee
             IBeeValueExpression count)
             => assignment.DestinationCollectionShape == CollectionShape.Array
                 ? body.NewArray(assignment.DestinationElementType, count)
+                : assignment.DestinationCollectionShape == CollectionShape.Set
+                    ? body.New(GetDestinationCollectionRuntimeType(assignment))
                 : body.New(GetDestinationCollectionRuntimeType(assignment), count);
 
         private static IBeeValueExpression NormalizeSourceCollection(
@@ -518,6 +520,14 @@ namespace OctoMap.Generation.Dynabee
                 return sourceItem.Type == assignment.DestinationElementType
                     ? sourceItem
                     : body.Convert(sourceItem, assignment.DestinationElementType);
+            }
+
+            if (assignment.ElementTypeConversion != null)
+            {
+                var convertedItem = ApplyTypeConversion(body, sourceItem, context, assignment.ElementTypeConversion);
+                return convertedItem.Type == assignment.DestinationElementType
+                    ? convertedItem
+                    : body.Convert(convertedItem, assignment.DestinationElementType);
             }
 
             var services = body.Property(context, nameof(IMapContext.Services));
@@ -564,6 +574,8 @@ namespace OctoMap.Generation.Dynabee
         private static Type GetDestinationCollectionRuntimeType(MemberAssignmentPlan assignment)
             => assignment.DestinationCollectionShape == CollectionShape.Array
                 ? assignment.DestinationProperty.PropertyType
+                : assignment.DestinationCollectionShape == CollectionShape.Set
+                    ? typeof(HashSet<>).MakeGenericType(assignment.DestinationElementType)
                 : typeof(List<>).MakeGenericType(assignment.DestinationElementType);
 
         private static IBeeValueExpression BuildNestedMapValue(

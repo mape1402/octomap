@@ -11,6 +11,7 @@ namespace OctoMap.Samples.Basic
         public override void Configure(IOctoMapConfigurationBuilder builder)
         {
             builder.CreateConverter<string, SkuCode>(x => new SkuCode(x.ToUpperInvariant()));
+            builder.CreateConverter<SkuCode, string>(x => x.Value);
 
             builder.CreateMap<Customer, CustomerDto>()
                 .ForMember(x => x.FullName, x => x.MapFrom(s => s.FirstName + " " + s.LastName))

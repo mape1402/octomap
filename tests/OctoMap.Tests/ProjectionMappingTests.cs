@@ -62,6 +62,40 @@ namespace OctoMap.Tests
             Assert.Contains("runtime-only", exception.Message);
         }
 
+        [Fact]
+        public void ProjectTo_Uses_Expression_Converter_For_Collection_Items()
+        {
+            var provider = CreateProvider<ProjectionCollectionProfile>();
+            var mapper = provider.GetRequiredService<IOctoMapper>();
+
+            var destination = new[]
+            {
+                new ProjectionCollectionOrder
+                {
+                    Codes = new List<string> { "a-1", "b-2" }
+                }
+            }.AsQueryable().ProjectTo<ProjectionCollectionOrderDto>(mapper.ProjectionBuilder).Single();
+
+            Assert.Equal(new[] { "A-1", "B-2" }, destination.Codes.Select(x => x.Value));
+        }
+
+        [Fact]
+        public void ProjectTo_Throws_When_Collection_Item_Conversion_Uses_Service_Converter()
+        {
+            var provider = CreateProvider<ProjectionCollectionServiceConverterProfile>();
+            var mapper = provider.GetRequiredService<IOctoMapper>();
+
+            var exception = Assert.Throws<NotSupportedException>(() => new[]
+            {
+                new ProjectionCollectionAmountOrder
+                {
+                    Amounts = new List<decimal> { 12.3m }
+                }
+            }.AsQueryable().ProjectTo<ProjectionCollectionAmountOrderDto>(mapper.ProjectionBuilder).ToArray());
+
+            Assert.Contains("runtime-only", exception.Message);
+        }
+
         private static ServiceProvider CreateProvider<TProfile>()
             where TProfile : OctoMapProfile, new()
         {
@@ -95,6 +129,24 @@ namespace OctoMap.Tests
             {
                 builder.CreateMap<ProjectionOrder, RuntimeResolverProjectionDto>()
                     .ForMember(x => x.Code, x => x.ResolveUsing<ProjectionCodeResolver>());
+            }
+        }
+
+        public sealed class ProjectionCollectionProfile : OctoMapProfile
+        {
+            public override void Configure(IOctoMapConfigurationBuilder builder)
+            {
+                builder.CreateConverter<string, ProjectionSkuCode>(x => new ProjectionSkuCode(x.ToUpperInvariant()));
+                builder.CreateMap<ProjectionCollectionOrder, ProjectionCollectionOrderDto>();
+            }
+        }
+
+        public sealed class ProjectionCollectionServiceConverterProfile : OctoMapProfile
+        {
+            public override void Configure(IOctoMapConfigurationBuilder builder)
+            {
+                builder.CreateConverter<ProjectionAmountTextConverter, decimal, ProjectionAmountText>();
+                builder.CreateMap<ProjectionCollectionAmountOrder, ProjectionCollectionAmountOrderDto>();
             }
         }
 
@@ -143,10 +195,40 @@ namespace OctoMap.Tests
             public string Code { get; set; }
         }
 
+        public sealed class ProjectionCollectionOrder
+        {
+            public List<string> Codes { get; set; }
+        }
+
+        public sealed class ProjectionCollectionOrderDto
+        {
+            public List<ProjectionSkuCode> Codes { get; set; }
+        }
+
+        public sealed record ProjectionSkuCode(string Value);
+
+        public sealed class ProjectionCollectionAmountOrder
+        {
+            public List<decimal> Amounts { get; set; }
+        }
+
+        public sealed class ProjectionCollectionAmountOrderDto
+        {
+            public List<ProjectionAmountText> Amounts { get; set; }
+        }
+
+        public sealed record ProjectionAmountText(string Value);
+
         public sealed class ProjectionCodeResolver : IValueResolver<ProjectionOrder, RuntimeResolverProjectionDto, string>
         {
             public string Resolve(ProjectionOrder source, RuntimeResolverProjectionDto destination, IMapContext context)
                 => source.Code;
+        }
+
+        public sealed class ProjectionAmountTextConverter : IValueConverter<decimal, ProjectionAmountText>
+        {
+            public ProjectionAmountText Convert(decimal source, IMapContext context)
+                => new(source.ToString("$0.00"));
         }
     }
 }

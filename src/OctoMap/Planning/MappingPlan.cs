@@ -97,7 +97,7 @@ namespace OctoMap.Planning
             object constantValue,
             bool hasNullSubstitute,
             object nullSubstitute)
-            : this(destinationProperty, sourceProperty, sourceExpression, null, null, null, null, null, null, false, CollectionShape.None, CollectionShape.None, null, null, true, hasConstantValue, constantValue, hasNullSubstitute, nullSubstitute, false, 0)
+            : this(destinationProperty, sourceProperty, sourceExpression, null, null, null, null, null, null, false, CollectionShape.None, CollectionShape.None, null, null, null, true, hasConstantValue, constantValue, hasNullSubstitute, nullSubstitute, false, 0)
         {
         }
 
@@ -118,6 +118,7 @@ namespace OctoMap.Planning
         /// <param name="destinationCollectionShape">The destination collection shape.</param>
         /// <param name="sourceElementType">The source element type.</param>
         /// <param name="destinationElementType">The destination element type.</param>
+        /// <param name="elementTypeConversion">The collection element type conversion.</param>
         /// <param name="allowNullCollection">A value indicating whether null source collections are mapped as null destination collections.</param>
         /// <param name="hasConstantValue">A value indicating whether this assignment uses a constant value.</param>
         /// <param name="constantValue">The constant value.</param>
@@ -142,6 +143,7 @@ namespace OctoMap.Planning
             CollectionShape destinationCollectionShape,
             Type sourceElementType,
             Type destinationElementType,
+            TypeConversionMap elementTypeConversion,
             bool allowNullCollection,
             bool hasConstantValue,
             object constantValue,
@@ -167,6 +169,7 @@ namespace OctoMap.Planning
             DestinationCollectionShape = destinationCollectionShape;
             SourceElementType = sourceElementType;
             DestinationElementType = destinationElementType;
+            ElementTypeConversion = elementTypeConversion;
             AllowNullCollection = allowNullCollection;
             HasConstantValue = hasConstantValue;
             ConstantValue = constantValue;
@@ -241,6 +244,11 @@ namespace OctoMap.Planning
         /// Gets the destination collection element type.
         /// </summary>
         public Type DestinationElementType { get; }
+
+        /// <summary>
+        /// Gets the collection element type conversion.
+        /// </summary>
+        public TypeConversionMap ElementTypeConversion { get; }
 
         /// <summary>
         /// Gets whether the assignment uses collection mapping.

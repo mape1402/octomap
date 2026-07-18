@@ -39,5 +39,10 @@ namespace OctoMap.Samples.Basic.Models
         /// Gets or sets the order items.
         /// </summary>
         public IEnumerable<OrderItem> Items { get; set; }
+
+        /// <summary>
+        /// Gets or sets the order tags.
+        /// </summary>
+        public IEnumerable<string> Tags { get; set; }
     }
 }

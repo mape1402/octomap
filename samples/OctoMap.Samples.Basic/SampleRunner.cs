@@ -115,10 +115,11 @@ namespace OctoMap.Samples.Basic
                 {
                     new() { Sku = "OCTO-MUG", Quantity = 2 },
                     new() { Sku = "OCTO-STICKER", Quantity = 5 }
-                }
+                },
+                Tags = new[] { "rush", "gift", "rush" }
             });
 
-            Console.WriteLine($"Resolver, value converter, nested map, collection map, flattening: {orderDto.Id} - {orderDto.Status} - {orderDto.Description} - {orderDto.StatusLabel} - {orderDto.TotalText} - {orderDto.Customer.FullName} - {orderDto.CustomerFirstName} - {orderDto.Items.Count} items");
+            Console.WriteLine($"Resolver, value converter, nested map, collection map, flattening: {orderDto.Id} - {orderDto.Status} - {orderDto.Description} - {orderDto.StatusLabel} - {orderDto.TotalText} - {orderDto.Customer.FullName} - {orderDto.CustomerFirstName} - {orderDto.Items.Count} items - {orderDto.Tags.Count} converted tags");
 
             var unflattenedOrder = _mapper.Map<OrderDto, Order>(new OrderDto
             {

@@ -21,6 +21,11 @@ namespace OctoMap.Planning
         List,
 
         /// <summary>
+        /// Indicates a closed generic <see cref="HashSet{T}"/>.
+        /// </summary>
+        Set,
+
+        /// <summary>
         /// Indicates a generic enumerable that must be normalized before indexed iteration.
         /// </summary>
         Enumerable

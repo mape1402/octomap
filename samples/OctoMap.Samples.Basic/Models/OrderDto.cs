@@ -44,5 +44,10 @@ namespace OctoMap.Samples.Basic.Models
         /// Gets or sets the order items.
         /// </summary>
         public IReadOnlyList<OrderItemDto> Items { get; set; }
+
+        /// <summary>
+        /// Gets or sets the converted order tags.
+        /// </summary>
+        public IReadOnlySet<SkuCode> Tags { get; set; }
     }
 }

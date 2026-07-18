@@ -150,6 +150,7 @@ namespace OctoMap.Planning
                             CollectionShape.None,
                             null,
                             null,
+                            null,
                             true,
                             false,
                             null,
@@ -212,6 +213,7 @@ namespace OctoMap.Planning
                 false,
                 CollectionShape.None,
                 CollectionShape.None,
+                null,
                 null,
                 null,
                 true,
@@ -293,6 +295,7 @@ namespace OctoMap.Planning
                     CollectionShape.None,
                     null,
                     null,
+                    null,
                     true,
                     false,
                     null,
@@ -357,6 +360,7 @@ namespace OctoMap.Planning
                 destinationCollectionShape: CollectionShape.None,
                 sourceElementType: null,
                 destinationElementType: null,
+                elementTypeConversion: null,
                 allowNullCollection: true,
                 memberMap?.HasConstantValue == true,
                 memberMap?.ConstantValue,
@@ -508,6 +512,11 @@ namespace OctoMap.Planning
                 return false;
             }
 
+            var elementTypeConversion = !destinationElementType.IsAssignableFrom(sourceElementType)
+                && _typeConversions.TryFind(sourceElementType, destinationElementType, out var conversion)
+                    ? conversion
+                    : null;
+
             assignment = new MemberAssignmentPlan(
                 destinationProperty,
                 sourceProperty,
@@ -523,6 +532,7 @@ namespace OctoMap.Planning
                 destinationShape,
                 sourceElementType,
                 destinationElementType,
+                elementTypeConversion,
                 memberMap?.AllowNullCollection ?? _options.AllowNullCollections,
                 false,
                 null,
@@ -565,6 +575,7 @@ namespace OctoMap.Planning
                 false,
                 CollectionShape.None,
                 CollectionShape.None,
+                null,
                 null,
                 null,
                 true,
@@ -665,9 +676,18 @@ namespace OctoMap.Planning
                 return true;
             }
 
+            if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(HashSet<>))
+            {
+                shape = CollectionShape.Set;
+                elementType = type.GetGenericArguments()[0];
+                return true;
+            }
+
             if (TryGetSupportedGenericCollectionElement(type, out elementType))
             {
-                shape = CollectionShape.Enumerable;
+                shape = IsSupportedSetInterface(type)
+                    ? CollectionShape.Set
+                    : CollectionShape.Enumerable;
                 return true;
             }
 
@@ -689,13 +709,27 @@ namespace OctoMap.Planning
                 || genericDefinition == typeof(ICollection<>)
                 || genericDefinition == typeof(IReadOnlyCollection<>)
                 || genericDefinition == typeof(IList<>)
-                || genericDefinition == typeof(IReadOnlyList<>))
+                || genericDefinition == typeof(IReadOnlyList<>)
+                || genericDefinition == typeof(ISet<>)
+                || genericDefinition == typeof(IReadOnlySet<>))
             {
                 elementType = type.GetGenericArguments()[0];
                 return true;
             }
 
             return false;
+        }
+
+        private static bool IsSupportedSetInterface(Type type)
+        {
+            if (!type.IsGenericType)
+            {
+                return false;
+            }
+
+            var genericDefinition = type.GetGenericTypeDefinition();
+            return genericDefinition == typeof(ISet<>)
+                || genericDefinition == typeof(IReadOnlySet<>);
         }
     }
 }

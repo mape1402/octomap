@@ -3,6 +3,7 @@ namespace OctoMap.Validation
     using System.Linq.Expressions;
     using System.Reflection;
     using OctoMap.Configuration;
+    using OctoMap.Planning;
 
     /// <summary>
     /// Validates OctoMap configuration maps.
@@ -632,9 +633,14 @@ namespace OctoMap.Validation
                     || !sourceProperties.TryGetValue(destinationProperty.Name, out var sourceProperty)
                     || destinationProperty.PropertyType.IsAssignableFrom(sourceProperty.PropertyType)
                     || CanUseNestedMap(sourceProperty.PropertyType, destinationProperty.PropertyType)
-                    || AreSupportedCollections(sourceProperty.PropertyType, destinationProperty.PropertyType)
                     || _typeConversions.TryFind(sourceProperty.PropertyType, destinationProperty.PropertyType, out _))
                 {
+                    continue;
+                }
+
+                if (AreSupportedCollections(sourceProperty.PropertyType, destinationProperty.PropertyType))
+                {
+                    ValidateCollectionMemberConversion(map, sourceProperty, destinationProperty, issues);
                     continue;
                 }
 
@@ -666,11 +672,60 @@ namespace OctoMap.Validation
             return true;
         }
 
+        private void ValidateCollectionMemberConversion(
+            TypeMap map,
+            PropertyInfo sourceProperty,
+            PropertyInfo destinationProperty,
+            List<OctoMapValidationIssue> issues)
+        {
+            if (!TryGetCollectionElementType(sourceProperty.PropertyType, out var sourceElementType)
+                || !TryGetCollectionElementType(destinationProperty.PropertyType, out var destinationElementType)
+                || destinationElementType.IsAssignableFrom(sourceElementType)
+                || CanUseNestedMap(sourceElementType, destinationElementType)
+                || _typeConversions.TryFind(sourceElementType, destinationElementType, out _))
+            {
+                return;
+            }
+
+            issues.Add(CreateIssue(
+                map,
+                destinationProperty.Name,
+                $"No type converter is registered for collection element type '{sourceElementType.FullName}' to destination collection element type '{destinationElementType.FullName}' on member '{destinationProperty.Name}'."));
+        }
+
         private static bool AreSupportedCollections(Type sourceType, Type destinationType)
-            => typeof(System.Collections.IEnumerable).IsAssignableFrom(sourceType)
-                && sourceType != typeof(string)
-                && typeof(System.Collections.IEnumerable).IsAssignableFrom(destinationType)
-                && destinationType != typeof(string);
+            => TryGetCollectionElementType(sourceType, out _)
+                && TryGetCollectionElementType(destinationType, out _);
+
+        private static bool TryGetCollectionElementType(Type type, out Type elementType)
+        {
+            if (type != typeof(string) && type.IsArray && type.GetArrayRank() == 1)
+            {
+                elementType = type.GetElementType();
+                return true;
+            }
+
+            if (type != typeof(string) && type.IsGenericType)
+            {
+                var genericDefinition = type.GetGenericTypeDefinition();
+                if (genericDefinition == typeof(List<>)
+                    || genericDefinition == typeof(HashSet<>)
+                    || genericDefinition == typeof(IEnumerable<>)
+                    || genericDefinition == typeof(ICollection<>)
+                    || genericDefinition == typeof(IReadOnlyCollection<>)
+                    || genericDefinition == typeof(IList<>)
+                    || genericDefinition == typeof(IReadOnlyList<>)
+                    || genericDefinition == typeof(ISet<>)
+                    || genericDefinition == typeof(IReadOnlySet<>))
+                {
+                    elementType = type.GetGenericArguments()[0];
+                    return true;
+                }
+            }
+
+            elementType = null;
+            return false;
+        }
 
         private static void ValidateResolver(ITypeMap map, MemberMap memberMap, List<OctoMapValidationIssue> issues)
         {

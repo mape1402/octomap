@@ -167,10 +167,78 @@ namespace OctoMap.Tests
             Assert.Contains("runtime implicit maps are disabled", exception.Message);
         }
 
+        [Fact]
+        public void Map_Uses_Global_Type_Conversion_For_Collection_Items()
+        {
+            var provider = CreateProvider<CollectionItemConversionProfile>();
+            var mapper = provider.GetRequiredService<IOctoMapper>();
+
+            var destination = mapper.Map<CollectionItemConversionSource, CollectionItemConversionDestination>(new CollectionItemConversionSource
+            {
+                Codes = new List<string> { "a-1", "b-2" }
+            });
+
+            Assert.Equal(new[] { "A-1", "B-2" }, destination.Codes.Select(x => x.Value));
+        }
+
+        [Fact]
+        public void Map_Resolves_Global_Service_Converter_For_Collection_Items()
+        {
+            var provider = CreateProvider<CollectionServiceConverterProfile>();
+            var mapper = provider.GetRequiredService<IOctoMapper>();
+
+            var destination = mapper.Map<CollectionAmountSource, CollectionAmountDestination>(new CollectionAmountSource
+            {
+                Amounts = new List<decimal> { 12.3m, 45.67m }
+            });
+
+            Assert.Equal(new[] { "$12.30", "$45.67" }, destination.Amounts.Select(x => x.Value));
+        }
+
+        [Fact]
+        public void Map_Assigns_HashSet_Destination()
+        {
+            var provider = CreateProvider<SetCollectionProfile>();
+            var mapper = provider.GetRequiredService<IOctoMapper>();
+
+            var destination = mapper.Map<SetCollectionSource, SetCollectionDestination>(new SetCollectionSource
+            {
+                Tags = new List<string> { "paid", "paid", "new" }
+            });
+
+            Assert.NotNull(destination.Tags);
+            Assert.Equal(new[] { "new", "paid" }, destination.Tags.OrderBy(x => x));
+        }
+
+        [Fact]
+        public void Map_Preserves_Existing_Collection_When_Source_Is_Null_And_Null_Source_Values_Are_Ignored()
+        {
+            var services = new ServiceCollection();
+            services.AddOctoMap(
+                options => options.IgnoreNullSourceValues = true,
+                typeof(NullCollectionOptionProfile).Assembly);
+            var provider = services.BuildServiceProvider();
+            var mapper = provider.GetRequiredService<IOctoMapper>();
+            var existingItems = new List<OrderItemDto> { new() { Label = "existing" } };
+            var destination = new NullCollectionOptionOrderDto
+            {
+                Items = existingItems
+            };
+
+            var result = mapper.Map<NullCollectionOptionOrder, NullCollectionOptionOrderDto>(
+                new NullCollectionOptionOrder { Items = null },
+                destination);
+
+            Assert.Same(destination, result);
+            Assert.Same(existingItems, result.Items);
+            Assert.Equal("existing", result.Items[0].Label);
+        }
+
         private static ServiceProvider CreateProvider<TProfile>()
             where TProfile : OctoMapProfile, new()
         {
             var services = new ServiceCollection();
+            services.AddTransient<CollectionAmountTextConverter>();
             services.AddOctoMap(typeof(TProfile).Assembly);
             return services.BuildServiceProvider();
         }
@@ -238,6 +306,32 @@ namespace OctoMap.Tests
                 builder.CreateMap<NullCollectionOptionOrder, NullCollectionOptionOrderDto>();
                 builder.CreateMap<OrderItem, OrderItemDto>()
                     .ForMember(x => x.Label, x => x.MapFrom(s => s.Sku + " x " + s.Quantity));
+            }
+        }
+
+        public sealed class CollectionItemConversionProfile : OctoMapProfile
+        {
+            public override void Configure(IOctoMapConfigurationBuilder builder)
+            {
+                builder.CreateConverter<string, CollectionSkuCode>(x => new CollectionSkuCode(x.ToUpperInvariant()));
+                builder.CreateMap<CollectionItemConversionSource, CollectionItemConversionDestination>();
+            }
+        }
+
+        public sealed class CollectionServiceConverterProfile : OctoMapProfile
+        {
+            public override void Configure(IOctoMapConfigurationBuilder builder)
+            {
+                builder.CreateConverter<CollectionAmountTextConverter, decimal, CollectionAmountText>();
+                builder.CreateMap<CollectionAmountSource, CollectionAmountDestination>();
+            }
+        }
+
+        public sealed class SetCollectionProfile : OctoMapProfile
+        {
+            public override void Configure(IOctoMapConfigurationBuilder builder)
+            {
+                builder.CreateMap<SetCollectionSource, SetCollectionDestination>();
             }
         }
 
@@ -335,6 +429,54 @@ namespace OctoMap.Tests
         public sealed class InterfaceOrderDto
         {
             public IReadOnlyList<ImplicitOrderItemDto> Items { get; set; }
+        }
+
+        public sealed class CollectionItemConversionSource
+        {
+            public List<string> Codes { get; set; }
+        }
+
+        public sealed class CollectionItemConversionDestination
+        {
+            public List<CollectionSkuCode> Codes { get; set; }
+        }
+
+        public sealed class CollectionSkuCode
+        {
+            public CollectionSkuCode(string value)
+            {
+                Value = value;
+            }
+
+            public string Value { get; }
+        }
+
+        public sealed class CollectionAmountSource
+        {
+            public List<decimal> Amounts { get; set; }
+        }
+
+        public sealed class CollectionAmountDestination
+        {
+            public List<CollectionAmountText> Amounts { get; set; }
+        }
+
+        public sealed record CollectionAmountText(string Value);
+
+        public sealed class CollectionAmountTextConverter : IValueConverter<decimal, CollectionAmountText>
+        {
+            public CollectionAmountText Convert(decimal source, IMapContext context)
+                => new(source.ToString("$0.00"));
+        }
+
+        public sealed class SetCollectionSource
+        {
+            public List<string> Tags { get; set; }
+        }
+
+        public sealed class SetCollectionDestination
+        {
+            public HashSet<string> Tags { get; set; }
         }
     }
 }
