@@ -524,6 +524,8 @@ namespace OctoMap.Validation
 
             return map.DestinationType
                 .GetConstructors(BindingFlags.Instance | BindingFlags.Public)
+                .OrderByDescending(x => x.GetCustomAttribute<MapConstructorAttribute>() != null)
+                .ThenByDescending(x => x.GetParameters().Length)
                 .Any(constructor =>
                 {
                     var parameters = constructor.GetParameters();

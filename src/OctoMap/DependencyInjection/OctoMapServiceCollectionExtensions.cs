@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Linq.Expressions;
 using DynaBee.FluentApi.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -93,8 +94,10 @@ namespace OctoMap
             foreach (var assembly in profileAssemblies ?? Array.Empty<Assembly>())
             {
                 RegisterInterfaceMaps(builder, assembly);
+                RegisterAttributeMaps(builder, assembly);
             }
 
+            ApplyAttributeMemberMaps(builder);
             return builder;
         }
 
@@ -128,6 +131,81 @@ namespace OctoMap
                     }
                 }
             }
+        }
+
+        private static void RegisterAttributeMaps(OctoMapConfigurationBuilder builder, Assembly assembly)
+        {
+            foreach (var type in assembly.GetTypes())
+            {
+                if (type.IsAbstract || type.IsInterface)
+                {
+                    continue;
+                }
+
+                foreach (var mapFrom in type.GetCustomAttributes<MapFromAttribute>())
+                {
+                    builder.CreateMap(mapFrom.SourceType, type);
+                }
+
+                foreach (var mapTo in type.GetCustomAttributes<MapToAttribute>())
+                {
+                    builder.CreateMap(type, mapTo.DestinationType);
+                }
+            }
+        }
+
+        private static void ApplyAttributeMemberMaps(OctoMapConfigurationBuilder builder)
+        {
+            foreach (var map in builder.Maps.Values)
+            {
+                foreach (var destinationProperty in map.DestinationType.GetProperties(BindingFlags.Instance | BindingFlags.Public))
+                {
+                    if (map.MemberMaps.ContainsKey(destinationProperty.Name))
+                    {
+                        continue;
+                    }
+
+                    ApplyAttributeMemberMap(map, destinationProperty);
+                }
+            }
+        }
+
+        private static void ApplyAttributeMemberMap(TypeMap map, PropertyInfo destinationProperty)
+        {
+            if (destinationProperty.GetCustomAttribute<IgnoreMapAttribute>() != null)
+            {
+                map.GetOrAddMemberMap(destinationProperty).IsIgnored = true;
+                return;
+            }
+
+            var mapName = destinationProperty.GetCustomAttribute<MapNameAttribute>();
+            var nullSubstitute = destinationProperty.GetCustomAttribute<NullSubstituteAttribute>();
+            if (mapName == null && nullSubstitute == null)
+            {
+                return;
+            }
+
+            var memberMap = map.GetOrAddMemberMap(destinationProperty);
+            if (mapName != null)
+            {
+                var sourceProperty = map.SourceType.GetProperty(mapName.Name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.IgnoreCase);
+                if (sourceProperty != null && sourceProperty.CanRead)
+                {
+                    memberMap.SourceExpression = CreateSourcePropertyExpression(map.SourceType, sourceProperty);
+                }
+            }
+
+            if (nullSubstitute != null)
+            {
+                memberMap.HasNullSubstitute = true;
+                memberMap.NullSubstitute = nullSubstitute.Value;
+            }
+        }
+
+        private static LambdaExpression CreateSourcePropertyExpression(Type sourceType, PropertyInfo sourceProperty)
+        {
+            var parameter = Expression.Parameter(sourceType, "source");
+            return Expression.Lambda(Expression.Property(parameter, sourceProperty), parameter);
         }
     }
 }

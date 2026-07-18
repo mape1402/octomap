@@ -431,7 +431,8 @@ namespace OctoMap.Planning
         {
             foreach (var candidate in destinationType
                 .GetConstructors(BindingFlags.Instance | BindingFlags.Public)
-                .OrderByDescending(x => x.GetParameters().Length))
+                .OrderByDescending(x => x.GetCustomAttribute<MapConstructorAttribute>() != null)
+                .ThenByDescending(x => x.GetParameters().Length))
             {
                 var parameters = candidate.GetParameters();
                 if (parameters.Length == 0)
