@@ -389,16 +389,10 @@ OctoMap can build LINQ projection expressions for query providers such as Entity
 var mapper = provider.GetRequiredService<IOctoMapper>();
 
 IQueryable<ProductDto> query = db.Products
-    .ProjectTo<Product, ProductDto>(mapper);
+    .ProjectTo<ProductDto>(mapper.ProjectionBuilder);
 ```
 
-`ProjectTo(...)` uses OctoMap configuration through `IOctoMapper` and builds an `Expression<Func<TSource, TDestination>>` behind the scenes. Projection is intentionally separate from the DynaBee runtime backend because LINQ providers need expression trees they can translate.
-
-You can also call projection directly from the mapper facade:
-
-```csharp
-IQueryable<ProductDto> query = mapper.ProjectTo<Product, ProductDto>(db.Products);
-```
+`ProjectTo(...)` uses `mapper.ProjectionBuilder` to build an `Expression<Func<TSource, TDestination>>` behind the scenes. Projection is intentionally separate from the DynaBee runtime backend because LINQ providers need expression trees they can translate.
 
 The first projection pass supports:
 

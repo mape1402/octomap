@@ -104,7 +104,7 @@ Projection usage:
 ```csharp
 var mapper = provider.GetRequiredService<IOctoMapper>();
 
-var query = db.Customers.ProjectTo<Customer, CustomerDto>(mapper);
+var query = db.Customers.ProjectTo<CustomerDto>(mapper.ProjectionBuilder);
 ```
 
 Profile-based usage:
@@ -648,10 +648,10 @@ Expression<Func<TSource, TDestination>> projection =
     projectionBuilder.Build<TSource, TDestination>();
 
 IQueryable<TDestination> query =
-    source.ProjectTo<TSource, TDestination>(mapper);
+    source.ProjectTo<TDestination>(mapper.ProjectionBuilder);
 ```
 
-`IOctoMapper` is the ergonomic projection facade for application code. The projection builder depends on OctoMap configuration, validation, and planning. It does not depend on DynaBee or `IMappingGenerationBackend`.
+`IOctoMapper` exposes `ProjectionBuilder` so application code can pass projection configuration through the mapper facade without injecting a second service. The projection builder depends on OctoMap configuration, validation, and planning. It does not depend on DynaBee or `IMappingGenerationBackend`.
 
 First-pass projection supports:
 

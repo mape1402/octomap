@@ -23,7 +23,7 @@ namespace OctoMap.Tests
                         Address = new ProjectionAddress { City = "London" }
                     }
                 }
-            }.AsQueryable().ProjectTo<ProjectionOrder, ProjectionOrderDto>(mapper).Single();
+            }.AsQueryable().ProjectTo<ProjectionOrderDto>(mapper.ProjectionBuilder).Single();
 
             Assert.Equal(1, destination.Id);
             Assert.Equal("ORD-1", destination.Code);
@@ -45,7 +45,7 @@ namespace OctoMap.Tests
                     Id = 7,
                     Name = "Grace"
                 }
-            }.AsQueryable().ProjectTo<ProjectionCustomer, ProjectionCustomerDto>(mapper).Single();
+            }.AsQueryable().ProjectTo<ProjectionCustomerDto>(mapper.ProjectionBuilder).Single();
 
             Assert.Equal(7, destination.Id);
             Assert.Equal("Grace", destination.Name);
@@ -57,7 +57,7 @@ namespace OctoMap.Tests
             var provider = CreateProvider<RuntimeResolverProjectionProfile>();
             var mapper = provider.GetRequiredService<IOctoMapper>();
 
-            var exception = Assert.Throws<NotSupportedException>(() => mapper.ProjectTo<ProjectionOrder, RuntimeResolverProjectionDto>(Array.Empty<ProjectionOrder>().AsQueryable()));
+            var exception = Assert.Throws<NotSupportedException>(() => Array.Empty<ProjectionOrder>().AsQueryable().ProjectTo<RuntimeResolverProjectionDto>(mapper.ProjectionBuilder).ToArray());
 
             Assert.Contains("runtime-only", exception.Message);
         }

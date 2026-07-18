@@ -252,25 +252,25 @@ Multi-source existing destination mapping is intentionally not exposed yet.
 public interface IOctoProjectionBuilder
 {
     Expression<Func<TSource, TDestination>> Build<TSource, TDestination>();
+    LambdaExpression Build(Type sourceType, Type destinationType);
 }
 
 public interface IOctoMapper
 {
-    IQueryable<TDestination> ProjectTo<TSource, TDestination>(
-        IQueryable<TSource> source);
+    IOctoProjectionBuilder ProjectionBuilder { get; }
 }
 
-public static IQueryable<TDestination> ProjectTo<TSource, TDestination>(
-    this IQueryable<TSource> source,
-    IOctoMapper mapper);
+public static IQueryable<TDestination> ProjectTo<TDestination>(
+    this IQueryable source,
+    IOctoProjectionBuilder projectionBuilder);
 ```
 
-`IOctoMapper.ProjectTo(...)` builds provider-friendly projection expressions from OctoMap configuration and applies them through `Queryable.Select(...)`. `IOctoProjectionBuilder` is also available as the lower-level projection abstraction.
+`ProjectTo(...)` builds provider-friendly projection expressions from OctoMap configuration and applies them through `Queryable.Select(...)`. The projection builder is exposed through `IOctoMapper.ProjectionBuilder`, so callers can use one mapper facade and pass its projection builder to the queryable extension.
 
 ```csharp
 var mapper = provider.GetRequiredService<IOctoMapper>();
 
-var query = db.Products.ProjectTo<Product, ProductDto>(mapper);
+var query = db.Products.ProjectTo<ProductDto>(mapper.ProjectionBuilder);
 ```
 
 Projection support is single-source. It can use configured maps or runtime implicit maps when `EnableRuntimeImplicitMaps` is enabled.
@@ -374,10 +374,11 @@ var dto = mapper.Map<OrderSummaryDto>(SourceSet.Of(order, customer));
 ```csharp
 public interface IOctoMapper
 {
+    IOctoProjectionBuilder ProjectionBuilder { get; }
     TDestination Map<TDestination>(object source);
     TDestination Map<TSource, TDestination>(TSource source);
+    TDestination Map<TSource, TDestination>(TSource source, TDestination destination);
     TDestination Map<TDestination>(SourceSet sources);
-    IQueryable<TDestination> ProjectTo<TSource, TDestination>(IQueryable<TSource> source);
 }
 ```
 

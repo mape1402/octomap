@@ -89,7 +89,7 @@ namespace OctoMap.Samples.Basic
                 }
             }
             .AsQueryable()
-            .ProjectTo<Product, ProductDto>(_mapper)
+            .ProjectTo<ProductDto>(_mapper.ProjectionBuilder)
             .Single();
 
             Console.WriteLine($"Projection map: {projectedProduct.Sku} - {projectedProduct.Price}");
@@ -191,7 +191,7 @@ namespace OctoMap.Samples.Basic
             _dbContext.SaveChanges();
 
             return _dbContext.Products
-                .ProjectTo<Product, ProductDto>(_mapper)
+                .ProjectTo<ProductDto>(_mapper.ProjectionBuilder)
                 .Single();
         }
     }

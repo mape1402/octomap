@@ -64,7 +64,7 @@ namespace OctoMap.Tests
                 new ExpressionConversionSource { Code = "abc" }
             }
             .AsQueryable()
-            .ProjectTo<ExpressionConversionSource, ExpressionConversionDestination>(mapper)
+            .ProjectTo<ExpressionConversionDestination>(mapper.ProjectionBuilder)
             .Single();
 
             Assert.Equal("ABC", destination.Code.Value);

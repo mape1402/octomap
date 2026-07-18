@@ -37,9 +37,21 @@ namespace OctoMap.Projection
 
         /// <inheritdoc/>
         public Expression<Func<TSource, TDestination>> Build<TSource, TDestination>()
+            => (Expression<Func<TSource, TDestination>>)Build(typeof(TSource), typeof(TDestination));
+
+        /// <inheritdoc/>
+        public LambdaExpression Build(Type sourceType, Type destinationType)
         {
-            var sourceType = typeof(TSource);
-            var destinationType = typeof(TDestination);
+            if (sourceType == null)
+            {
+                throw new ArgumentNullException(nameof(sourceType));
+            }
+
+            if (destinationType == null)
+            {
+                throw new ArgumentNullException(nameof(destinationType));
+            }
+
             var typeMap = _configuration.FindMap(sourceType, destinationType)
                 ?? CreateImplicitMap(sourceType, destinationType);
 
@@ -50,17 +62,17 @@ namespace OctoMap.Projection
             }
 
             var plan = _planBuilder.Build(typeMap);
-            return BuildProjectionExpression<TSource, TDestination>(plan);
+            return BuildProjectionExpression(plan);
         }
 
-        private static Expression<Func<TSource, TDestination>> BuildProjectionExpression<TSource, TDestination>(MappingPlan plan)
+        private static LambdaExpression BuildProjectionExpression(MappingPlan plan)
         {
             if (plan.SourceTypes.Count != 1)
             {
                 throw new NotSupportedException("Projection is only supported for single-source maps.");
             }
 
-            var source = Expression.Parameter(typeof(TSource), "source");
+            var source = Expression.Parameter(plan.SourceType, "source");
             var construction = BuildDestinationConstruction(plan, source);
             var bindings = new List<MemberBinding>();
             foreach (var assignment in plan.Assignments)
@@ -82,7 +94,7 @@ namespace OctoMap.Projection
                 ? construction
                 : Expression.MemberInit(construction, bindings);
 
-            return Expression.Lambda<Func<TSource, TDestination>>(body, source);
+            return Expression.Lambda(body, source);
         }
 
         private static NewExpression BuildDestinationConstruction(MappingPlan plan, ParameterExpression source)

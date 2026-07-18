@@ -6,6 +6,11 @@ namespace OctoMap
     public interface IOctoMapper
     {
         /// <summary>
+        /// Gets the projection builder used by queryable projection extensions.
+        /// </summary>
+        IOctoProjectionBuilder ProjectionBuilder { get; }
+
+        /// <summary>
         /// Maps the specified source instance to a destination type.
         /// </summary>
         /// <typeparam name="TDestination">The destination type.</typeparam>
@@ -40,13 +45,5 @@ namespace OctoMap
         /// <returns>The mapped destination instance.</returns>
         TDestination Map<TDestination>(SourceSet sources);
 
-        /// <summary>
-        /// Projects the specified queryable source sequence to the destination type.
-        /// </summary>
-        /// <typeparam name="TSource">The source type.</typeparam>
-        /// <typeparam name="TDestination">The destination type.</typeparam>
-        /// <param name="source">The source query.</param>
-        /// <returns>The projected query.</returns>
-        IQueryable<TDestination> ProjectTo<TSource, TDestination>(IQueryable<TSource> source);
     }
 }

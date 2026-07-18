@@ -62,18 +62,13 @@ Projection support is essential for Entity Framework and other LINQ providers.
 Target API:
 
 ```csharp
-IQueryable<OrderDto> query = db.Orders.ProjectTo<Order, OrderDto>(mapper);
-```
-
-or:
-
-```csharp
-IQueryable<OrderDto> query = mapper.ProjectTo<Order, OrderDto>(db.Orders);
+IQueryable<OrderDto> query = db.Orders.ProjectTo<OrderDto>(mapper.ProjectionBuilder);
 ```
 
 Implemented first pass:
 
 - add `IOctoProjectionBuilder`
+- expose `IOctoProjectionBuilder` through `IOctoMapper.ProjectionBuilder`
 - keep projection generation separate from `IMappingGenerationBackend`
 - reuse OctoMap configuration and mapping plans where possible
 - direct property mapping

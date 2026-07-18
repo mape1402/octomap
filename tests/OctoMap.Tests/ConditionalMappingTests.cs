@@ -98,7 +98,7 @@ namespace OctoMap.Tests
             var mapper = provider.GetRequiredService<IOctoMapper>();
 
             var exception = Assert.Throws<NotSupportedException>(() =>
-                Array.Empty<ConditionalOrder>().AsQueryable().ProjectTo<ConditionalOrder, ConditionalOrderDto>(mapper).ToArray());
+                Array.Empty<ConditionalOrder>().AsQueryable().ProjectTo<ConditionalOrderDto>(mapper.ProjectionBuilder).ToArray());
 
             Assert.Contains("conditional mapping", exception.Message);
         }
