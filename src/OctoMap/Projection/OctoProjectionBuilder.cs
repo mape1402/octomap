@@ -72,6 +72,11 @@ namespace OctoMap.Projection
                 throw new NotSupportedException("Projection is only supported for single-source maps.");
             }
 
+            if (plan.LifecycleActions.Count > 0)
+            {
+                throw new NotSupportedException("Projection cannot use maps with lifecycle actions because they are runtime-only.");
+            }
+
             var source = Expression.Parameter(plan.SourceType, "source");
             var construction = BuildDestinationConstruction(plan, source);
             var bindings = new List<MemberBinding>();

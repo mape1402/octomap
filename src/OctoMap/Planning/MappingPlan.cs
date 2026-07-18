@@ -24,11 +24,47 @@ namespace OctoMap.Planning
         /// <summary>
         /// Initializes a new instance of the <see cref="MappingPlan"/> class.
         /// </summary>
+        /// <param name="sourceType">The source type.</param>
+        /// <param name="destinationType">The destination type.</param>
+        /// <param name="assignments">The member assignment plans.</param>
+        /// <param name="construction">The destination construction plan.</param>
+        /// <param name="lifecycleActions">The lifecycle action plans.</param>
+        public MappingPlan(
+            Type sourceType,
+            Type destinationType,
+            IReadOnlyList<MemberAssignmentPlan> assignments,
+            DestinationConstructionPlan construction,
+            IReadOnlyList<LifecycleActionPlan> lifecycleActions)
+            : this(new[] { sourceType }, destinationType, assignments, construction, lifecycleActions)
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="MappingPlan"/> class.
+        /// </summary>
         /// <param name="sourceTypes">The source types.</param>
         /// <param name="destinationType">The destination type.</param>
         /// <param name="assignments">The member assignment plans.</param>
         /// <param name="construction">The destination construction plan.</param>
         public MappingPlan(IReadOnlyList<Type> sourceTypes, Type destinationType, IReadOnlyList<MemberAssignmentPlan> assignments, DestinationConstructionPlan construction = null)
+            : this(sourceTypes, destinationType, assignments, construction, Array.Empty<LifecycleActionPlan>())
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="MappingPlan"/> class.
+        /// </summary>
+        /// <param name="sourceTypes">The source types.</param>
+        /// <param name="destinationType">The destination type.</param>
+        /// <param name="assignments">The member assignment plans.</param>
+        /// <param name="construction">The destination construction plan.</param>
+        /// <param name="lifecycleActions">The lifecycle action plans.</param>
+        public MappingPlan(
+            IReadOnlyList<Type> sourceTypes,
+            Type destinationType,
+            IReadOnlyList<MemberAssignmentPlan> assignments,
+            DestinationConstructionPlan construction,
+            IReadOnlyList<LifecycleActionPlan> lifecycleActions)
         {
             if (sourceTypes == null)
             {
@@ -45,6 +81,7 @@ namespace OctoMap.Planning
             DestinationType = destinationType ?? throw new ArgumentNullException(nameof(destinationType));
             Assignments = assignments ?? throw new ArgumentNullException(nameof(assignments));
             Construction = construction;
+            LifecycleActions = lifecycleActions ?? throw new ArgumentNullException(nameof(lifecycleActions));
         }
 
         /// <summary>
@@ -71,6 +108,11 @@ namespace OctoMap.Planning
         /// Gets the destination construction plan.
         /// </summary>
         public DestinationConstructionPlan Construction { get; }
+
+        /// <summary>
+        /// Gets the lifecycle action plans.
+        /// </summary>
+        public IReadOnlyList<LifecycleActionPlan> LifecycleActions { get; }
 
     }
 

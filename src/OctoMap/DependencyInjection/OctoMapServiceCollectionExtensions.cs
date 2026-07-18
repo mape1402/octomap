@@ -53,6 +53,7 @@ namespace OctoMap
             var maps = configurationBuilder.Maps;
             var multiMaps = configurationBuilder.MultiMaps;
             var typeConversions = configurationBuilder.TypeConversions;
+            var inlineLifecycleActions = configurationBuilder.InlineLifecycleActions;
 
             services.AddSingleton(options);
             services.AddSingleton<IOctoMapProfileDiscovery, OctoMapProfileDiscovery>();
@@ -68,6 +69,7 @@ namespace OctoMap
                 sp.GetRequiredService<IMappingPlanDescriber>()));
             services.AddSingleton<IOctoMapConfiguration>(sp => sp.GetRequiredService<OctoMapConfiguration>());
             services.TryAddSingleton<IDynaBeeAssemblyBuilderFactory, DynaBeeAssemblyBuilderFactory>();
+            services.AddSingleton<IInlineLifecycleActionRegistry>(new InlineLifecycleActionRegistry(inlineLifecycleActions));
             services.AddSingleton<IMappingGenerationBackend, DynabeeMappingGenerationBackend>();
             services.AddSingleton<ICompiledMapRegistry, CompiledMapRegistry>();
             services.AddSingleton<IOctoProjectionBuilder, OctoProjectionBuilder>();

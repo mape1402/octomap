@@ -23,6 +23,36 @@ namespace OctoMap
         IMapExpression<TSource, TDestination> ConstructUsing(Expression<Func<TSource, TDestination>> constructionExpression);
 
         /// <summary>
+        /// Configures an action that runs before member assignment.
+        /// </summary>
+        /// <param name="action">The lifecycle action.</param>
+        /// <returns>The current map expression.</returns>
+        IMapExpression<TSource, TDestination> BeforeMap(Action<TSource, TDestination, IMapContext> action);
+
+        /// <summary>
+        /// Configures a service action that runs before member assignment.
+        /// </summary>
+        /// <typeparam name="TAction">The lifecycle action type.</typeparam>
+        /// <returns>The current map expression.</returns>
+        IMapExpression<TSource, TDestination> BeforeMap<TAction>()
+            where TAction : IMappingAction<TSource, TDestination>;
+
+        /// <summary>
+        /// Configures an action that runs after member assignment.
+        /// </summary>
+        /// <param name="action">The lifecycle action.</param>
+        /// <returns>The current map expression.</returns>
+        IMapExpression<TSource, TDestination> AfterMap(Action<TSource, TDestination, IMapContext> action);
+
+        /// <summary>
+        /// Configures a service action that runs after member assignment.
+        /// </summary>
+        /// <typeparam name="TAction">The lifecycle action type.</typeparam>
+        /// <returns>The current map expression.</returns>
+        IMapExpression<TSource, TDestination> AfterMap<TAction>()
+            where TAction : IMappingAction<TSource, TDestination>;
+
+        /// <summary>
         /// Configures a destination member.
         /// </summary>
         /// <typeparam name="TMember">The destination member type.</typeparam>

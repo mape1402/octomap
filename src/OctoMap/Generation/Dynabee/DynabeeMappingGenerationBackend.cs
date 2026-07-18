@@ -7,6 +7,7 @@ using DynaBee.FluentApi.Invocation;
 using Microsoft.Extensions.DependencyInjection;
 using OctoMap.Configuration;
 using OctoMap.Planning;
+using OctoMap.Runtime;
 
 namespace OctoMap.Generation.Dynabee
 {
@@ -136,12 +137,69 @@ namespace OctoMap.Generation.Dynabee
                 body.Assign(destination, CreateDestination(body, sources, context, plan));
             }
 
+            EmitLifecycleActions(body, sources, destination, context, plan, LifecycleActionTiming.Before);
+
             foreach (var assignment in plan.Assignments)
             {
                 EmitAssignment(body, sources, destination, context, assignment, useExistingDestination);
             }
 
+            EmitLifecycleActions(body, sources, destination, context, plan, LifecycleActionTiming.After);
+
             body.Return(destination);
+        }
+
+        private static void EmitLifecycleActions(
+            IBeeMethodBodyBuilder body,
+            IReadOnlyList<IBeeValueExpression> sources,
+            IBeeValueExpression destination,
+            IBeeValueExpression context,
+            MappingPlan plan,
+            LifecycleActionTiming timing)
+        {
+            foreach (var action in plan.LifecycleActions.Where(x => x.Timing == timing))
+            {
+                if (action.ActionType != null)
+                {
+                    EmitServiceLifecycleAction(body, sources[0], destination, context, action.ActionType);
+                    continue;
+                }
+
+                EmitInlineLifecycleAction(body, sources[0], destination, context, action.InlineActionId.Value);
+            }
+        }
+
+        private static void EmitServiceLifecycleAction(
+            IBeeMethodBodyBuilder body,
+            IBeeValueExpression source,
+            IBeeValueExpression destination,
+            IBeeValueExpression context,
+            Type actionType)
+        {
+            var services = body.Property(context, nameof(IMapContext.Services));
+            var action = body.StaticCall(GetRequiredServiceMethod(actionType), services);
+            var actionContract = typeof(IMappingAction<,>).MakeGenericType(source.Type, destination.Type);
+            var processMethod = actionContract.GetMethod(nameof(IMappingAction<object, object>.Process));
+            body.Evaluate(body.Call(action, processMethod, source, destination, context));
+        }
+
+        private static void EmitInlineLifecycleAction(
+            IBeeMethodBodyBuilder body,
+            IBeeValueExpression source,
+            IBeeValueExpression destination,
+            IBeeValueExpression context,
+            int inlineActionId)
+        {
+            var services = body.Property(context, nameof(IMapContext.Services));
+            var registry = body.StaticCall(GetRequiredServiceMethod(typeof(IInlineLifecycleActionRegistry)), services);
+            var executeMethod = typeof(IInlineLifecycleActionRegistry).GetMethod(nameof(IInlineLifecycleActionRegistry.Execute));
+            body.Evaluate(body.Call(
+                registry,
+                executeMethod,
+                body.Constant(inlineActionId),
+                source.Type == typeof(object) ? source : body.Convert(source, typeof(object)),
+                destination.Type == typeof(object) ? destination : body.Convert(destination, typeof(object)),
+                context));
         }
 
         private static void EmitAssignment(

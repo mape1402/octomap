@@ -176,7 +176,14 @@ namespace OctoMap.Planning
                 assignments.Add(CreateAssignment(memberMap.DestinationProperty, null, memberMap.SourceExpression, memberMap));
             }
 
-            return new MappingPlan(typeMap.SourceType, typeMap.DestinationType, assignments, construction);
+            return new MappingPlan(
+                typeMap.SourceType,
+                typeMap.DestinationType,
+                assignments,
+                construction,
+                typeMap is TypeMap lifecycleTypeMap
+                    ? CreateLifecycleActionPlans(lifecycleTypeMap)
+                    : Array.Empty<LifecycleActionPlan>());
         }
 
         private static bool CanWrite(PropertyInfo property)
@@ -307,6 +314,11 @@ namespace OctoMap.Planning
 
             return new MappingPlan(typeMap.SourceTypes, typeMap.DestinationType, assignments);
         }
+
+        private static IReadOnlyList<LifecycleActionPlan> CreateLifecycleActionPlans(TypeMap typeMap)
+            => typeMap.LifecycleActions
+                .Select(x => new LifecycleActionPlan(x.Timing, x.InlineActionId, x.ActionType))
+                .ToArray();
 
         private DestinationConstructionPlan CreateConstructionPlan(
             Type sourceType,

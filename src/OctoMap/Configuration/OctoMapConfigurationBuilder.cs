@@ -13,6 +13,8 @@ namespace OctoMap.Configuration
         private readonly Dictionary<MapKey, TypeMap> _maps = new();
         private readonly Dictionary<MapKey, TypeConversionMap> _conversions = new();
         private readonly List<MultiSourceTypeMap> _multiMaps = new();
+        private readonly Dictionary<int, Action<object, object, IMapContext>> _inlineLifecycleActions = new();
+        private int _inlineLifecycleActionId;
 
         /// <summary>
         /// Gets the configured single-source maps.
@@ -28,6 +30,12 @@ namespace OctoMap.Configuration
         /// Gets the configured global conversions.
         /// </summary>
         internal ITypeConversionRegistry TypeConversions => new TypeConversionRegistry(_conversions.Values);
+
+        /// <summary>
+        /// Gets the configured inline lifecycle actions.
+        /// </summary>
+        internal IReadOnlyDictionary<int, Action<object, object, IMapContext>> InlineLifecycleActions
+            => new Dictionary<int, Action<object, object, IMapContext>>(_inlineLifecycleActions);
 
         /// <inheritdoc/>
         public IMapExpression<TSource, TDestination> CreateMap<TSource, TDestination>()
@@ -74,6 +82,25 @@ namespace OctoMap.Configuration
             }
 
             return map;
+        }
+
+        /// <summary>
+        /// Adds an inline lifecycle action to the configuration.
+        /// </summary>
+        /// <typeparam name="TSource">The source type.</typeparam>
+        /// <typeparam name="TDestination">The destination type.</typeparam>
+        /// <param name="action">The lifecycle action.</param>
+        /// <returns>The action identifier.</returns>
+        internal int AddInlineLifecycleAction<TSource, TDestination>(Action<TSource, TDestination, IMapContext> action)
+        {
+            if (action == null)
+            {
+                throw new ArgumentNullException(nameof(action));
+            }
+
+            var id = System.Threading.Interlocked.Increment(ref _inlineLifecycleActionId);
+            _inlineLifecycleActions[id] = (source, destination, context) => action((TSource)source, (TDestination)destination, context);
+            return id;
         }
 
         /// <inheritdoc/>

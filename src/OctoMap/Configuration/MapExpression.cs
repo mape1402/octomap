@@ -50,6 +50,24 @@ namespace OctoMap.Configuration
         }
 
         /// <inheritdoc/>
+        public IMapExpression<TSource, TDestination> BeforeMap(Action<TSource, TDestination, IMapContext> action)
+            => AddLifecycleAction(LifecycleActionTiming.Before, action, null);
+
+        /// <inheritdoc/>
+        public IMapExpression<TSource, TDestination> BeforeMap<TAction>()
+            where TAction : IMappingAction<TSource, TDestination>
+            => AddLifecycleAction(LifecycleActionTiming.Before, null, typeof(TAction));
+
+        /// <inheritdoc/>
+        public IMapExpression<TSource, TDestination> AfterMap(Action<TSource, TDestination, IMapContext> action)
+            => AddLifecycleAction(LifecycleActionTiming.After, action, null);
+
+        /// <inheritdoc/>
+        public IMapExpression<TSource, TDestination> AfterMap<TAction>()
+            where TAction : IMappingAction<TSource, TDestination>
+            => AddLifecycleAction(LifecycleActionTiming.After, null, typeof(TAction));
+
+        /// <inheritdoc/>
         public IMapExpression<TSource, TDestination> ForMember<TMember>(
             Expression<Func<TDestination, TMember>> destinationMember,
             Action<IMemberMapExpression<TSource, TDestination, TMember>> configure)
@@ -67,6 +85,25 @@ namespace OctoMap.Configuration
             var property = GetProperty(destinationMember);
             var memberMap = _typeMap.GetOrAddMemberMap(property);
             configure(new MemberMapExpression<TSource, TDestination, TMember>(memberMap));
+            return this;
+        }
+
+        private IMapExpression<TSource, TDestination> AddLifecycleAction(
+            LifecycleActionTiming timing,
+            Delegate inlineAction,
+            Type actionType)
+        {
+            if (inlineAction == null && actionType == null)
+            {
+                throw new ArgumentNullException(nameof(inlineAction));
+            }
+
+            int? inlineActionId = inlineAction == null
+                ? null
+                : _configurationBuilder == null
+                    ? throw new NotSupportedException("Inline lifecycle actions require a map created directly through CreateMap.")
+                    : _configurationBuilder.AddInlineLifecycleAction((Action<TSource, TDestination, IMapContext>)inlineAction);
+            _typeMap.AddLifecycleAction(new LifecycleActionMap(timing, inlineActionId, actionType));
             return this;
         }
 

@@ -8,6 +8,7 @@ namespace OctoMap.Configuration
     internal sealed class TypeMap : ITypeMap
     {
         private readonly Dictionary<string, MemberMap> _memberMaps = new(StringComparer.OrdinalIgnoreCase);
+        private readonly List<LifecycleActionMap> _lifecycleActions = new();
 
         /// <summary>
         /// Initializes a new instance of the <see cref="TypeMap"/> class.
@@ -37,9 +38,28 @@ namespace OctoMap.Configuration
         public IReadOnlyDictionary<string, MemberMap> MemberMaps => _memberMaps;
 
         /// <summary>
+        /// Gets the configured lifecycle actions.
+        /// </summary>
+        public IReadOnlyList<LifecycleActionMap> LifecycleActions => _lifecycleActions;
+
+        /// <summary>
         /// Gets or sets the configured destination construction expression.
         /// </summary>
         public LambdaExpression ConstructionExpression { get; set; }
+
+        /// <summary>
+        /// Adds a lifecycle action to this map.
+        /// </summary>
+        /// <param name="lifecycleAction">The lifecycle action.</param>
+        public void AddLifecycleAction(LifecycleActionMap lifecycleAction)
+        {
+            if (lifecycleAction == null)
+            {
+                throw new ArgumentNullException(nameof(lifecycleAction));
+            }
+
+            _lifecycleActions.Add(lifecycleAction);
+        }
 
         /// <summary>
         /// Gets or creates explicit configuration for a destination member.
