@@ -45,6 +45,11 @@ namespace OctoMap.Configuration
                 return map;
             }
 
+            if (TryCreateClosedGenericMap(sourceType, destinationType, out var closedGenericMap))
+            {
+                return closedGenericMap;
+            }
+
             return _maps.Values
                 .Where(x => x.SourceType.IsAssignableFrom(sourceType)
                     && destinationType.IsAssignableFrom(x.DestinationType))
@@ -151,6 +156,30 @@ namespace OctoMap.Configuration
             }
 
             return int.MaxValue;
+        }
+
+        private bool TryCreateClosedGenericMap(Type sourceType, Type destinationType, out ITypeMap map)
+        {
+            map = null;
+            if (!sourceType.IsGenericType || !destinationType.IsGenericType)
+            {
+                return false;
+            }
+
+            var sourceDefinition = sourceType.GetGenericTypeDefinition();
+            var destinationDefinition = destinationType.GetGenericTypeDefinition();
+            var openMap = _maps.Values.FirstOrDefault(x =>
+                x.SourceType.IsGenericTypeDefinition
+                && x.DestinationType.IsGenericTypeDefinition
+                && x.SourceType == sourceDefinition
+                && x.DestinationType == destinationDefinition);
+            if (openMap == null)
+            {
+                return false;
+            }
+
+            map = new TypeMap(sourceType, destinationType, false);
+            return true;
         }
     }
 }

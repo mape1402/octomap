@@ -40,6 +40,11 @@ namespace OctoMap.Validation
 
         private void ValidateMap(ITypeMap map, List<OctoMapValidationIssue> issues)
         {
+            if (map.SourceType.ContainsGenericParameters || map.DestinationType.ContainsGenericParameters)
+            {
+                return;
+            }
+
             if (map is not TypeMap typeMap)
             {
                 ValidateDestinationCreation(map, issues);
