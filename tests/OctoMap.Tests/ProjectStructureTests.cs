@@ -33,5 +33,26 @@ namespace OctoMap.Tests
             Assert.Contains("EmitsBody", source, StringComparison.Ordinal);
             Assert.Contains("CreateInstance", source, StringComparison.Ordinal);
         }
+
+        [Fact]
+        public void CompiledMap_Does_Not_Expose_Dynabee_Contracts()
+        {
+            var sourcePath = Path.GetFullPath(Path.Combine(
+                AppContext.BaseDirectory,
+                "..",
+                "..",
+                "..",
+                "..",
+                "..",
+                "src",
+                "OctoMap",
+                "Generation",
+                "CompiledMap.cs"));
+            var source = File.ReadAllText(sourcePath);
+
+            Assert.DoesNotContain("DynaBee", source, StringComparison.Ordinal);
+            Assert.DoesNotContain("IDynaBeeBoundMethodInvoker", source, StringComparison.Ordinal);
+            Assert.Contains("ICompiledMapInvoker", source, StringComparison.Ordinal);
+        }
     }
 }

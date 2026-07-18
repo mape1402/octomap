@@ -72,7 +72,7 @@ namespace OctoMap.Generation.Dynabee
                 mapper,
                 nameof(IOctoMapper<object, object>.Map),
                 plan.SourceTypes.Concat(new[] { typeof(IMapContext) }).ToArray());
-            return new CompiledMap(mapper, mapper.GetType(), invoker);
+            return new CompiledMap(mapper, mapper.GetType(), new DynabeeCompiledMapInvoker(invoker));
         }
 
         private static string BuildClassName(MappingPlan plan)
