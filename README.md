@@ -175,6 +175,25 @@ builder.CreateMap<OrderLine, OrderLineDto>()
 
 `PreCondition(...)` and `Condition(...)` are supported by runtime mapping for direct members, resolvers, converters, nested maps, collection maps, `ForPath(...)`, and source contributions in multi-source maps. Projection support is planned separately.
 
+## Existing Destination Mapping
+
+Use the two-argument `Map(...)` overload when the destination instance already exists and should be updated in place.
+
+```csharp
+var existing = new CustomerDto
+{
+    InternalCode = "preserved"
+};
+
+var result = mapper.Map(customer, existing);
+
+ReferenceEquals(existing, result); // true
+```
+
+Existing destination mapping uses the same single-source runtime mapping plan as normal object creation, but the generated method skips destination construction and assigns into the supplied instance. Ignored members and skipped conditional members keep their previous destination values. `ForPath(...)` reuses existing intermediate destination objects and creates missing ones when their types are supported.
+
+This first pass supports single-source maps. Multi-source maps still require explicit creation because OctoMap intentionally avoids implicit multi-source behavior.
+
 ## DI-Based Value Converters
 
 Value converters transform one source member value into one destination member value. They are useful when the conversion depends on application services, formatting rules, localization, or domain policies.
@@ -651,6 +670,7 @@ Expected output:
 
 ```text
 Configured map: 100 - Grace Hopper - internal 'ignored'
+Existing destination map: same instance True - Grace Hopper - internal 'preserved'
 Plan description: CustomerDto.Id <- Customer.Id
 Constructor map: 100 - Grace Hopper
 Implicit map: OCTO-001 - 49.95

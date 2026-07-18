@@ -159,6 +159,33 @@ When enabled, `mapper.Map<TDestination>(source)` can create and cache a conventi
 
 Runtime implicit maps do not apply to multi-source maps.
 
+## Existing Destination Mapping
+
+```csharp
+public interface IOctoMapper
+{
+    TDestination Map<TSource, TDestination>(
+        TSource source,
+        TDestination destination);
+}
+```
+
+The existing destination overload updates the supplied destination instance and returns the same instance.
+
+```csharp
+var result = mapper.Map(customer, existingCustomerDto);
+```
+
+Supported behavior:
+
+- single-source maps
+- configured maps and runtime implicit maps
+- direct members, nested maps, collections, converters, resolvers, null substitutes, conditions, and `ForPath(...)`
+- reuse of existing nested destination instances when a nested map is applied
+- creation of missing `ForPath(...)` intermediates when their types can be constructed
+
+Multi-source existing destination mapping is intentionally not exposed yet.
+
 ## Projection Mapping
 
 ```csharp

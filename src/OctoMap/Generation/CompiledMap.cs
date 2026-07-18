@@ -11,7 +11,7 @@ namespace OctoMap.Generation
         /// <param name="mapper">The generated mapper instance.</param>
         /// <param name="mapperType">The generated mapper type.</param>
         public CompiledMap(object mapper, Type mapperType)
-            : this(mapper, mapperType, null)
+            : this(mapper, mapperType, null, null)
         {
         }
 
@@ -22,10 +22,27 @@ namespace OctoMap.Generation
         /// <param name="mapperType">The generated mapper type.</param>
         /// <param name="invoker">The compiled map invoker.</param>
         public CompiledMap(object mapper, Type mapperType, ICompiledMapInvoker invoker)
+            : this(mapper, mapperType, invoker, null)
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="CompiledMap"/> class.
+        /// </summary>
+        /// <param name="mapper">The generated mapper instance.</param>
+        /// <param name="mapperType">The generated mapper type.</param>
+        /// <param name="invoker">The compiled map invoker.</param>
+        /// <param name="existingDestinationInvoker">The compiled existing destination map invoker.</param>
+        public CompiledMap(
+            object mapper,
+            Type mapperType,
+            ICompiledMapInvoker invoker,
+            ICompiledMapInvoker existingDestinationInvoker)
         {
             Mapper = mapper ?? throw new ArgumentNullException(nameof(mapper));
             MapperType = mapperType ?? throw new ArgumentNullException(nameof(mapperType));
             Invoker = invoker;
+            ExistingDestinationInvoker = existingDestinationInvoker;
         }
 
         /// <summary>
@@ -42,5 +59,10 @@ namespace OctoMap.Generation
         /// Gets the compiled map invoker.
         /// </summary>
         public ICompiledMapInvoker Invoker { get; }
+
+        /// <summary>
+        /// Gets the compiled existing destination map invoker.
+        /// </summary>
+        public ICompiledMapInvoker ExistingDestinationInvoker { get; }
     }
 }

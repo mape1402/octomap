@@ -43,6 +43,13 @@ namespace OctoMap.Samples.Basic
             var customerDto = _mapper.Map<Customer, CustomerDto>(customer);
             Console.WriteLine($"Configured map: {customerDto.Id} - {customerDto.FullName} - internal '{customerDto.InternalCode ?? "ignored"}'");
 
+            var existingCustomerDto = new CustomerDto
+            {
+                InternalCode = "preserved"
+            };
+            var updatedCustomerDto = _mapper.Map(customer, existingCustomerDto);
+            Console.WriteLine($"Existing destination map: same instance {ReferenceEquals(existingCustomerDto, updatedCustomerDto)} - {updatedCustomerDto.FullName} - internal '{updatedCustomerDto.InternalCode}'");
+
             var planDescription = _configuration.DescribeMap<Customer, CustomerDto>().Split(Environment.NewLine)[0];
             Console.WriteLine($"Plan description: {planDescription}");
 

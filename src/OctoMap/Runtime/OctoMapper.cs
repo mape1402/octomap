@@ -43,8 +43,24 @@ namespace OctoMap
         public TDestination Map<TSource, TDestination>(TSource source)
         {
             var compiledMap = _compiledMapRegistry.GetOrAdd(typeof(TSource), typeof(TDestination));
-            var mapper = (IOctoMapper<TSource, TDestination>)compiledMap.Mapper;
-            return mapper.Map(source, _contextFactory.Create());
+            return (TDestination)compiledMap.Invoker.Invoke(new object[] { source, _contextFactory.Create() });
+        }
+
+        /// <inheritdoc/>
+        public TDestination Map<TSource, TDestination>(TSource source, TDestination destination)
+        {
+            if (destination == null)
+            {
+                throw new ArgumentNullException(nameof(destination));
+            }
+
+            var compiledMap = _compiledMapRegistry.GetOrAdd(typeof(TSource), typeof(TDestination));
+            if (compiledMap.ExistingDestinationInvoker == null)
+            {
+                throw new InvalidOperationException($"Compiled map '{compiledMap.MapperType.FullName}' does not support existing destination invocation.");
+            }
+
+            return (TDestination)compiledMap.ExistingDestinationInvoker.Invoke(new object[] { source, destination, _contextFactory.Create() });
         }
 
         /// <inheritdoc/>

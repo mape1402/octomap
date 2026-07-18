@@ -392,9 +392,10 @@ Dynabee implementation:
 ```text
 DynabeeMappingPlanCompiler
   -> creates dynamic class
-  -> implements IOctoMapper<TSource, TDestination>
   -> emits Map(TSource source, IMapContext context)
+  -> emits MapToExisting(TSource source, TDestination destination, IMapContext context) for single-source update maps
   -> emits Map(source1, source2, ..., IMapContext context) for multi-source maps
+  -> creates backend-neutral compiled method invokers
   -> emits direct IL for property reads/writes
   -> emits calls to generated nested mappers when needed
 ```
@@ -402,22 +403,25 @@ DynabeeMappingPlanCompiler
 Generated mapper shape:
 
 ```csharp
-public interface IOctoMapper<TSource, TDestination>
+internal sealed class GeneratedCustomerMapper
 {
     TDestination Map(TSource source, IMapContext context);
+    TDestination MapToExisting(TSource source, TDestination destination, IMapContext context);
 }
 ```
 
 Multi-source generated mapper shape:
 
 ```csharp
-public interface IOctoMapper<TSource1, TSource2, TDestination>
+internal sealed class GeneratedOrderSummaryMapper
 {
     TDestination Map(TSource1 source1, TSource2 source2, IMapContext context);
 }
 ```
 
-For `params object[]` scenarios, OctoMap can route through an internal compiled map entry, but the generated hot path should still be typed whenever possible.
+Generated classes are intentionally not part of the public abstraction surface. `CompiledMap` exposes backend-neutral invokers for creation and existing-destination mapping, while public `IOctoMapper` and `IOctoMapper<TSource, TDestination>` remain ordinary injectable OctoMap services.
+
+For source-set scenarios, OctoMap routes through an internal compiled map entry, but generated method signatures should still be typed whenever possible.
 
 The generated mapper should be a normal class:
 
@@ -445,7 +449,7 @@ Responsibilities:
 - Resolve the compiled mapper by source-set/destination pair.
 - Create map contexts.
 - Handle object/object overloads.
-- Route generic calls to typed generated mappers.
+- Route generic calls through backend-neutral compiled map invokers.
 - Cache compiled map delegates or mapper instances.
 - Surface friendly runtime errors.
 - Create implicit maps on demand when enabled.
@@ -455,9 +459,8 @@ Runtime API:
 ```csharp
 TDestination Map<TDestination>(object source);
 TDestination Map<TSource, TDestination>(TSource source);
-TDestination Map<TSource1, TSource2, TDestination>(TSource1 source1, TSource2 source2);
-TDestination Map<TDestination>(params object[] sources);
-TDestination Map<TSource, TDestination>(TSource source, Action<MapOptions> options);
+TDestination Map<TSource, TDestination>(TSource source, TDestination destination);
+TDestination Map<TDestination>(SourceSet sources);
 object Map(object source, Type sourceType, Type destinationType);
 object Map(IReadOnlyList<object> sources, Type destinationType);
 ```

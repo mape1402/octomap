@@ -34,6 +34,7 @@ These capabilities are already implemented or have an initial working version:
 - first-pass `ForPath(...)` runtime destination path mapping
 - first-pass mapping plan inspection and description
 - first-pass runtime conditional mapping
+- first-pass existing destination mapping for single-source maps
 - README, API docs, architecture docs, sample project, and unit tests
 
 ## Core Principles
@@ -214,28 +215,37 @@ Remaining work:
 
 ### 5. Existing Destination Mapping
 
-OctoMap should support mapping onto an existing destination instance.
+OctoMap supports first-pass mapping onto an existing destination instance for single-source maps.
 
-Target API:
+Implemented API:
 
 ```csharp
 mapper.Map(source, existingDestination);
 mapper.Map<TSource, TDestination>(source, destination);
 ```
 
-Required scenarios:
+Implemented scenarios:
 
 - update existing DTOs
-- update EF tracked entities
+- update EF tracked entities through the same object instance
 - partial update workflows
-- preserve destination values when source values are null, when configured
+- preserve destination values for ignored members and skipped conditional members
 
-Design requirements:
+Implemented design:
 
-- generated update methods
+- generated update methods through the backend adapter
 - no destination object construction when mapping into an existing instance
-- same member rules where applicable
-- clear behavior for readonly members
+- same single-source member rules where applicable
+- nested maps reuse existing nested destination instances when present
+- `ForPath(...)` reuses existing intermediate destination objects and creates missing supported intermediates
+
+Remaining work:
+
+- richer null behavior such as `IgnoreNullSourceValues`
+- explicit validation and diagnostics for readonly destination members in update mode
+- destination collection merge/update policies instead of always replacing destination collections
+- multi-source existing destination mapping, only if a clear explicit API is designed
+- projection-compatible patch/update helpers, if needed for EF workflows
 
 ### 6. Better Null Semantics
 
