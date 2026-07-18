@@ -25,5 +25,11 @@ namespace OctoMap.Configuration
         {
             _memberMap.SourceExpression = sourceExpression ?? throw new ArgumentNullException(nameof(sourceExpression));
         }
+
+        /// <inheritdoc/>
+        public void IgnoreNullSourceValue(bool ignoreNull = true)
+        {
+            _memberMap.IgnoreNullSourceValue = ignoreNull;
+        }
     }
 }

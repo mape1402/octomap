@@ -139,6 +139,12 @@ namespace OctoMap.Configuration
         }
 
         /// <inheritdoc/>
+        public void IgnoreNullSourceValue(bool ignoreNull = true)
+        {
+            _memberMap.IgnoreNullSourceValue = ignoreNull;
+        }
+
+        /// <inheritdoc/>
         public void AllowNullCollection(bool allowNull)
         {
             _memberMap.AllowNullCollection = allowNull;

@@ -96,7 +96,7 @@ namespace OctoMap.Planning
             object constantValue,
             bool hasNullSubstitute,
             object nullSubstitute)
-            : this(destinationProperty, sourceProperty, sourceExpression, null, null, null, null, null, false, CollectionShape.None, CollectionShape.None, null, null, true, hasConstantValue, constantValue, hasNullSubstitute, nullSubstitute, 0)
+            : this(destinationProperty, sourceProperty, sourceExpression, null, null, null, null, null, false, CollectionShape.None, CollectionShape.None, null, null, true, hasConstantValue, constantValue, hasNullSubstitute, nullSubstitute, false, 0)
         {
         }
 
@@ -121,6 +121,7 @@ namespace OctoMap.Planning
         /// <param name="constantValue">The constant value.</param>
         /// <param name="hasNullSubstitute">A value indicating whether this assignment has a null substitute.</param>
         /// <param name="nullSubstitute">The null substitute value.</param>
+        /// <param name="ignoreNullSourceValue">A value indicating whether null resolved source values skip assignment.</param>
         /// <param name="sourceIndex">The source index.</param>
         /// <param name="sourcePath">The source property path.</param>
         /// <param name="destinationPath">The destination property path.</param>
@@ -143,6 +144,7 @@ namespace OctoMap.Planning
             object constantValue,
             bool hasNullSubstitute,
             object nullSubstitute,
+            bool ignoreNullSourceValue,
             int sourceIndex,
             IReadOnlyList<PropertyInfo> sourcePath = null,
             IReadOnlyList<PropertyInfo> destinationPath = null)
@@ -166,6 +168,7 @@ namespace OctoMap.Planning
             ConstantValue = constantValue;
             HasNullSubstitute = hasNullSubstitute;
             NullSubstitute = nullSubstitute;
+            IgnoreNullSourceValue = ignoreNullSourceValue;
             SourceIndex = sourceIndex;
             SourcePath = sourcePath ?? Array.Empty<PropertyInfo>();
         }
@@ -259,6 +262,11 @@ namespace OctoMap.Planning
         /// Gets the null substitute value.
         /// </summary>
         public object NullSubstitute { get; }
+
+        /// <summary>
+        /// Gets whether null resolved source values skip destination assignment.
+        /// </summary>
+        public bool IgnoreNullSourceValue { get; }
 
         /// <summary>
         /// Gets the source index.

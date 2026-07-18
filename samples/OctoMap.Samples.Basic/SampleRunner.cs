@@ -50,6 +50,12 @@ namespace OctoMap.Samples.Basic
             var updatedCustomerDto = _mapper.Map(customer, existingCustomerDto);
             Console.WriteLine($"Existing destination map: same instance {ReferenceEquals(existingCustomerDto, updatedCustomerDto)} - {updatedCustomerDto.FullName} - internal '{updatedCustomerDto.InternalCode}'");
 
+            var patchedCustomerDto = _mapper.Map(new CustomerPatch
+            {
+                FullName = null
+            }, updatedCustomerDto);
+            Console.WriteLine($"Ignore null source value patch: {patchedCustomerDto.FullName}");
+
             var planDescription = _configuration.DescribeMap<Customer, CustomerDto>().Split(Environment.NewLine)[0];
             Console.WriteLine($"Plan description: {planDescription}");
 

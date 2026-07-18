@@ -35,6 +35,7 @@ These capabilities are already implemented or have an initial working version:
 - first-pass mapping plan inspection and description
 - first-pass runtime conditional mapping
 - first-pass existing destination mapping for single-source maps
+- first-pass `IgnoreNullSourceValues` and per-member `IgnoreNullSourceValue(...)`
 - README, API docs, architecture docs, sample project, and unit tests
 
 ## Core Principles
@@ -249,16 +250,24 @@ Remaining work:
 
 ### 6. Better Null Semantics
 
-Current null behavior should be expanded.
+Current null behavior should continue expanding. First-pass null source skipping is implemented.
 
-Target features:
+Implemented:
+
+- global `OctoMapOptions.IgnoreNullSourceValues`
+- per-member `IgnoreNullSourceValue(...)`
+- per-member override back to assignment with `IgnoreNullSourceValue(false)`
+- integration with existing destination mapping
+- integration with conditions, resolvers, converters, direct members, nested maps, collections, and `ForPath(...)`
+- `NullSubstitute(...)` precedence before null source skipping
+
+Remaining target features:
 
 - `NullSubstitute` for nullable value types
 - `AllowNullDestinationValues`
-- `IgnoreNullSourceValues`
 - per-profile null behavior
 - per-map null behavior
-- per-member null behavior
+- richer per-member null behavior
 - null propagation rules for flattening and paths
 - null behavior compatibility with projections
 

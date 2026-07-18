@@ -14,6 +14,9 @@ namespace OctoMap.Samples.Basic
                 .ForMember(x => x.FullName, x => x.MapFrom(s => s.FirstName + " " + s.LastName))
                 .ForMember(x => x.InternalCode, x => x.Ignore());
 
+            builder.CreateMap<CustomerPatch, CustomerDto>()
+                .ForMember(x => x.FullName, x => x.IgnoreNullSourceValue());
+
             builder.CreateMap<Customer, CustomerRecordDto>()
                 .ConstructUsing(s => new CustomerRecordDto(s.Id, string.Concat(s.FirstName.Trim(), " ", s.LastName.Trim())));
 

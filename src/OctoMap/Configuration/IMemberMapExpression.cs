@@ -75,6 +75,12 @@ namespace OctoMap
         void NullSubstitute(TMember value);
 
         /// <summary>
+        /// Configures whether null resolved source values should skip assignment for this member.
+        /// </summary>
+        /// <param name="ignoreNull">True to skip null values; false to assign null values.</param>
+        void IgnoreNullSourceValue(bool ignoreNull = true);
+
+        /// <summary>
         /// Configures whether a null source collection can map to a null destination collection for this member.
         /// </summary>
         /// <param name="allowNull">True to preserve null collections; false to map null collections to empty collections.</param>

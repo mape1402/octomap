@@ -172,17 +172,42 @@ namespace OctoMap.Generation.Dynabee
             bool useExistingDestination)
         {
             var value = BuildAssignmentValue(body, sources, destination, context, assignment, useExistingDestination);
-            if (assignment.ConditionExpression != null)
+            var usesResolvedLocal = assignment.ConditionExpression != null
+                || (assignment.IgnoreNullSourceValue && CanBeNull(value.Type));
+            var assignmentValue = value;
+            if (usesResolvedLocal)
             {
                 var resolvedValue = body.DeclareLocal($"resolved_{assignment.DestinationProperty.Name}", value.Type);
                 body.Assign(resolvedValue, value);
-                var condition = BuildConditionExpression(body, sources, resolvedValue, assignment.ConditionExpression, assignment.SourceIndex);
+                assignmentValue = resolvedValue;
+            }
+
+            if (assignment.ConditionExpression != null)
+            {
+                var condition = BuildConditionExpression(body, sources, assignmentValue, assignment.ConditionExpression, assignment.SourceIndex);
                 body.If(
                     condition,
+                    whenTrue => EmitNullAwareAssignment(whenTrue, destination, assignment, assignmentValue));
+                return;
+            }
+
+            EmitNullAwareAssignment(body, destination, assignment, assignmentValue);
+        }
+
+        private static void EmitNullAwareAssignment(
+            IBeeMethodBodyBuilder body,
+            IBeeValueExpression destination,
+            MemberAssignmentPlan assignment,
+            IBeeValueExpression value)
+        {
+            if (assignment.IgnoreNullSourceValue && CanBeNull(value.Type))
+            {
+                body.If(
+                    body.Not(body.IsNull(value)),
                     whenTrue =>
                     {
                         var target = BuildDestinationTarget(whenTrue, destination, assignment);
-                        whenTrue.Assign(target, resolvedValue);
+                        whenTrue.Assign(target, value);
                     });
                 return;
             }

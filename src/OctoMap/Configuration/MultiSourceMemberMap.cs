@@ -26,5 +26,10 @@ namespace OctoMap.Configuration
         /// Gets or sets the source context expression.
         /// </summary>
         public LambdaExpression SourceExpression { get; set; }
+
+        /// <summary>
+        /// Gets or sets the per-member null source assignment behavior override.
+        /// </summary>
+        public bool? IgnoreNullSourceValue { get; set; }
     }
 }

@@ -145,6 +145,7 @@ namespace OctoMap.Planning
                             null,
                             false,
                             null,
+                            configuredMemberMap?.IgnoreNullSourceValue ?? _options.IgnoreNullSourceValues,
                             0));
                     }
 
@@ -170,7 +171,7 @@ namespace OctoMap.Planning
         private static bool CanWrite(PropertyInfo property)
             => property.CanWrite && property.SetMethod != null && property.SetMethod.IsPublic;
 
-        private static MemberAssignmentPlan CreateAssignment(
+        private MemberAssignmentPlan CreateAssignment(
             PropertyInfo destinationProperty,
             PropertyInfo sourceProperty,
             System.Linq.Expressions.LambdaExpression sourceExpression,
@@ -194,11 +195,12 @@ namespace OctoMap.Planning
                 memberMap?.ConstantValue,
                 memberMap?.HasNullSubstitute == true,
                 memberMap?.NullSubstitute,
+                memberMap?.IgnoreNullSourceValue ?? _options.IgnoreNullSourceValues,
                 0,
                 null,
                 memberMap?.DestinationPath);
 
-        private static MappingPlan BuildMultiSource(MultiSourceTypeMap typeMap)
+        private MappingPlan BuildMultiSource(MultiSourceTypeMap typeMap)
         {
             EnsureDestinationCanBeCreated(typeMap.DestinationType);
 
@@ -249,6 +251,7 @@ namespace OctoMap.Planning
                     null,
                     false,
                     null,
+                    memberMap.IgnoreNullSourceValue ?? _options.IgnoreNullSourceValues,
                     -1));
             }
 
@@ -286,7 +289,7 @@ namespace OctoMap.Planning
                 new HashSet<string>(parameterPlans.Select(x => x.Parameter.Name), StringComparer.OrdinalIgnoreCase));
         }
 
-        private static MemberAssignmentPlan CreateAssignment(
+        private MemberAssignmentPlan CreateAssignment(
             PropertyInfo destinationProperty,
             PropertyInfo sourceProperty,
             System.Linq.Expressions.LambdaExpression sourceExpression,
@@ -311,6 +314,7 @@ namespace OctoMap.Planning
                 memberMap?.ConstantValue,
                 memberMap?.HasNullSubstitute == true,
                 memberMap?.NullSubstitute,
+                memberMap?.IgnoreNullSourceValue ?? _options.IgnoreNullSourceValues,
                 sourceIndex,
                 null,
                 memberMap?.DestinationPath);
@@ -468,11 +472,12 @@ namespace OctoMap.Planning
                 null,
                 false,
                 null,
+                memberMap?.IgnoreNullSourceValue ?? _options.IgnoreNullSourceValues,
                 0);
             return true;
         }
 
-        private static bool TryCreateFlattenedAssignment(
+        private bool TryCreateFlattenedAssignment(
             PropertyInfo destinationProperty,
             IReadOnlyDictionary<string, PropertyInfo> sourceProperties,
             out MemberAssignmentPlan assignment)
@@ -508,6 +513,7 @@ namespace OctoMap.Planning
                 null,
                 false,
                 null,
+                _options.IgnoreNullSourceValues,
                 0,
                 sourcePath);
             return true;

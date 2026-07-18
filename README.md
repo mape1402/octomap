@@ -137,6 +137,7 @@ Supported member rules:
 - `NullSubstitute(...)`: replaces null source results for reference-type destination members.
 - `PreCondition(...)`: skips value resolution and assignment when the source predicate fails.
 - `Condition(...)`: skips assignment when the source or resolved value predicate fails.
+- `IgnoreNullSourceValue(...)`: skips assignment when the resolved source value is null.
 - `Ignore()`: excludes a destination member.
 
 `MapFrom(...)` supports common generated expression shapes, including member access, constants, conversions, conditional expressions, arithmetic, comparisons, short-circuiting boolean logic, boolean negation, null coalescing, string concatenation, instance method calls, and static method calls.
@@ -193,6 +194,34 @@ ReferenceEquals(existing, result); // true
 Existing destination mapping uses the same single-source runtime mapping plan as normal object creation, but the generated method skips destination construction and assigns into the supplied instance. Ignored members and skipped conditional members keep their previous destination values. `ForPath(...)` reuses existing intermediate destination objects and creates missing ones when their types are supported.
 
 This first pass supports single-source maps. Multi-source maps still require explicit creation because OctoMap intentionally avoids implicit multi-source behavior.
+
+## Null Source Value Handling
+
+Use `IgnoreNullSourceValue()` when a null source value should preserve the current destination value.
+
+```csharp
+builder.CreateMap<CustomerPatch, CustomerDto>()
+    .ForMember(x => x.FullName, x => x.IgnoreNullSourceValue());
+
+mapper.Map(new CustomerPatch { FullName = null }, existingCustomerDto);
+```
+
+You can also enable the behavior globally.
+
+```csharp
+services.AddOctoMap(
+    options => options.IgnoreNullSourceValues = true,
+    typeof(SalesProfile).Assembly);
+```
+
+Per-member configuration wins over the global option:
+
+```csharp
+builder.CreateMap<CustomerPatch, CustomerDto>()
+    .ForMember(x => x.FullName, x => x.IgnoreNullSourceValue(false));
+```
+
+`NullSubstitute(...)` runs before the null-skip check, so an explicit substitute value is assigned even when null source values are ignored.
 
 ## DI-Based Value Converters
 
@@ -671,6 +700,7 @@ Expected output:
 ```text
 Configured map: 100 - Grace Hopper - internal 'ignored'
 Existing destination map: same instance True - Grace Hopper - internal 'preserved'
+Ignore null source value patch: Grace Hopper
 Plan description: CustomerDto.Id <- Customer.Id
 Constructor map: 100 - Grace Hopper
 Implicit map: OCTO-001 - 49.95

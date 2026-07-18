@@ -77,6 +77,7 @@ void ResolveUsing<TResolver>()
     where TResolver : IValueResolver<TSource, TDestination, TMember>;
 void UseValue(TMember value);
 void NullSubstitute(TMember value);
+void IgnoreNullSourceValue(bool ignoreNull = true);
 ```
 
 ### Conditional Members
@@ -92,6 +93,35 @@ builder.CreateMap<OrderLine, OrderLineDto>()
 ```
 
 `PreCondition(...)` runs before value resolution. `Condition(...)` runs after value resolution and before assignment. Runtime mapping supports conditional members for direct members, resolvers, converters, nested maps, collection maps, destination paths, and source contributions in multi-source maps. Projection support for conditional mapping is not implemented yet.
+
+### Null Source Values
+
+```csharp
+public sealed class OctoMapOptions
+{
+    public bool IgnoreNullSourceValues { get; set; }
+}
+```
+
+`IgnoreNullSourceValues` skips destination assignment when the resolved source value is null. This is useful for patch/update workflows that map onto an existing destination instance.
+
+```csharp
+services.AddOctoMap(
+    options => options.IgnoreNullSourceValues = true,
+    typeof(SalesProfile).Assembly);
+```
+
+Per-member configuration overrides the global option.
+
+```csharp
+builder.CreateMap<CustomerPatch, CustomerDto>()
+    .ForMember(x => x.FullName, x => x.IgnoreNullSourceValue());
+
+builder.CreateMap<CustomerPatch, CustomerDto>()
+    .ForMember(x => x.FullName, x => x.IgnoreNullSourceValue(false));
+```
+
+`NullSubstitute(...)` is applied before the null assignment check, so explicit substitute values are still assigned.
 
 ### Destination Paths
 

@@ -14,5 +14,10 @@ namespace OctoMap
         /// Gets or sets whether null source collections are mapped as null destination collections.
         /// </summary>
         public bool AllowNullCollections { get; set; } = true;
+
+        /// <summary>
+        /// Gets or sets whether null resolved source values skip destination assignment.
+        /// </summary>
+        public bool IgnoreNullSourceValues { get; set; }
     }
 }

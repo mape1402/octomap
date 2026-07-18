@@ -80,6 +80,11 @@ namespace OctoMap.Diagnostics
                 conditions.Add($"condition: {GetExpressionDescription(assignment.ConditionExpression, GetSourcePrefix(plan, assignment))}");
             }
 
+            if (assignment.IgnoreNullSourceValue)
+            {
+                conditions.Add("ignore-null");
+            }
+
             return conditions.Count == 0
                 ? string.Empty
                 : $" [{string.Join("; ", conditions)}]";
