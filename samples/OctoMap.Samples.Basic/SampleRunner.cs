@@ -8,14 +8,19 @@ namespace OctoMap.Samples.Basic
     public sealed class SampleRunner
     {
         private readonly IOctoMapper _mapper;
+        private readonly SampleSalesDbContext _dbContext;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="SampleRunner"/> class.
         /// </summary>
         /// <param name="mapper">The OctoMap mapper.</param>
-        public SampleRunner(IOctoMapper mapper)
+        /// <param name="dbContext">The Entity Framework sample database context.</param>
+        public SampleRunner(
+            IOctoMapper mapper,
+            SampleSalesDbContext dbContext)
         {
             _mapper = mapper ?? throw new ArgumentNullException(nameof(mapper));
+            _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         }
 
         /// <summary>
@@ -47,6 +52,23 @@ namespace OctoMap.Samples.Basic
 
             var reversedProduct = _mapper.Map<ProductDto, Product>(productDto);
             Console.WriteLine($"Reverse map: {reversedProduct.Sku} - {reversedProduct.Price}");
+
+            var projectedProduct = new[]
+            {
+                new Product
+                {
+                    Sku = "OCTO-PROJ",
+                    Price = 19.95m
+                }
+            }
+            .AsQueryable()
+            .ProjectTo<Product, ProductDto>(_mapper)
+            .Single();
+
+            Console.WriteLine($"Projection map: {projectedProduct.Sku} - {projectedProduct.Price}");
+
+            var projectedEfProduct = RunEfProjectionSample();
+            Console.WriteLine($"EF SQLite projection map: {projectedEfProduct.Sku} - {projectedEfProduct.Price}");
 
             var orderDto = _mapper.Map<Order, OrderDto>(new Order
             {
@@ -108,6 +130,23 @@ namespace OctoMap.Samples.Basic
                 }));
 
             Console.WriteLine($"Multi-source map: {summary.OrderId} - {summary.CustomerName} - {summary.Label}");
+        }
+
+        private ProductDto RunEfProjectionSample()
+        {
+            _dbContext.Database.EnsureDeleted();
+            _dbContext.Database.EnsureCreated();
+
+            _dbContext.Products.Add(new Product
+            {
+                Sku = "OCTO-SQLITE",
+                Price = 29.95m
+            });
+            _dbContext.SaveChanges();
+
+            return _dbContext.Products
+                .ProjectTo<Product, ProductDto>(_mapper)
+                .Single();
         }
     }
 }

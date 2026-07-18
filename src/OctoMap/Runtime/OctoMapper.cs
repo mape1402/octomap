@@ -9,16 +9,22 @@ namespace OctoMap
     {
         private readonly ICompiledMapRegistry _compiledMapRegistry;
         private readonly IMapContextFactory _contextFactory;
+        private readonly IOctoProjectionBuilder _projectionBuilder;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="OctoMapper"/> class.
         /// </summary>
         /// <param name="compiledMapRegistry">The compiled map registry.</param>
         /// <param name="contextFactory">The mapping context factory.</param>
-        public OctoMapper(ICompiledMapRegistry compiledMapRegistry, IMapContextFactory contextFactory)
+        /// <param name="projectionBuilder">The projection builder.</param>
+        public OctoMapper(
+            ICompiledMapRegistry compiledMapRegistry,
+            IMapContextFactory contextFactory,
+            IOctoProjectionBuilder projectionBuilder)
         {
             _compiledMapRegistry = compiledMapRegistry ?? throw new ArgumentNullException(nameof(compiledMapRegistry));
             _contextFactory = contextFactory ?? throw new ArgumentNullException(nameof(contextFactory));
+            _projectionBuilder = projectionBuilder ?? throw new ArgumentNullException(nameof(projectionBuilder));
         }
 
         /// <inheritdoc/>
@@ -56,6 +62,17 @@ namespace OctoMap
             }
 
             return (TDestination)compiledMap.Invoker.Invoke(sources.Sources.Concat(new object[] { _contextFactory.Create() }).ToArray());
+        }
+
+        /// <inheritdoc/>
+        public IQueryable<TDestination> ProjectTo<TSource, TDestination>(IQueryable<TSource> source)
+        {
+            if (source == null)
+            {
+                throw new ArgumentNullException(nameof(source));
+            }
+
+            return source.Select(_projectionBuilder.Build<TSource, TDestination>());
         }
     }
 }

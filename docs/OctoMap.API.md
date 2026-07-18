@@ -125,6 +125,53 @@ When enabled, `mapper.Map<TDestination>(source)` can create and cache a conventi
 
 Runtime implicit maps do not apply to multi-source maps.
 
+## Projection Mapping
+
+```csharp
+public interface IOctoProjectionBuilder
+{
+    Expression<Func<TSource, TDestination>> Build<TSource, TDestination>();
+}
+
+public interface IOctoMapper
+{
+    IQueryable<TDestination> ProjectTo<TSource, TDestination>(
+        IQueryable<TSource> source);
+}
+
+public static IQueryable<TDestination> ProjectTo<TSource, TDestination>(
+    this IQueryable<TSource> source,
+    IOctoMapper mapper);
+```
+
+`IOctoMapper.ProjectTo(...)` builds provider-friendly projection expressions from OctoMap configuration and applies them through `Queryable.Select(...)`. `IOctoProjectionBuilder` is also available as the lower-level projection abstraction.
+
+```csharp
+var mapper = provider.GetRequiredService<IOctoMapper>();
+
+var query = db.Products.ProjectTo<Product, ProductDto>(mapper);
+```
+
+Projection support is single-source. It can use configured maps or runtime implicit maps when `EnableRuntimeImplicitMaps` is enabled.
+
+Supported projection features:
+
+- direct property mapping
+- configured `MapFrom(...)` expressions
+- constants
+- null substitutes
+- flattening
+- convention constructor projection
+- explicit constructor projection when `ConstructUsing(...)` uses a `new` expression
+
+Unsupported projection features throw `NotSupportedException`:
+
+- DI resolvers
+- DI value converters
+- nested runtime mapping
+- collection runtime mapping
+- multi-source maps
+
 ## Flattening
 
 Single-source maps support flattened destination members by convention.
@@ -209,6 +256,7 @@ public interface IOctoMapper
     TDestination Map<TDestination>(object source);
     TDestination Map<TSource, TDestination>(TSource source);
     TDestination Map<TDestination>(SourceSet sources);
+    IQueryable<TDestination> ProjectTo<TSource, TDestination>(IQueryable<TSource> source);
 }
 ```
 

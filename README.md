@@ -275,6 +275,42 @@ builder.CreateMap<Customer, CustomerDto>()
 
 This can map `CustomerDto.DisplayName` back to `Customer.Name`. Reverse mapping does not currently reverse resolvers, converters, flattening, unflattening, complex expressions, or multi-source maps.
 
+## Projection Mapping
+
+OctoMap can build LINQ projection expressions for query providers such as Entity Framework.
+
+```csharp
+var mapper = provider.GetRequiredService<IOctoMapper>();
+
+IQueryable<ProductDto> query = db.Products
+    .ProjectTo<Product, ProductDto>(mapper);
+```
+
+`ProjectTo(...)` uses OctoMap configuration through `IOctoMapper` and builds an `Expression<Func<TSource, TDestination>>` behind the scenes. Projection is intentionally separate from the DynaBee runtime backend because LINQ providers need expression trees they can translate.
+
+You can also call projection directly from the mapper facade:
+
+```csharp
+IQueryable<ProductDto> query = mapper.ProjectTo<Product, ProductDto>(db.Products);
+```
+
+The first projection pass supports:
+
+- direct property mapping
+- configured `MapFrom(...)` expressions
+- constants
+- null substitutes
+- convention flattening
+- constructor projection for records and immutable DTOs
+
+Runtime-only features are rejected with clear errors:
+
+- DI resolvers
+- DI value converters
+- nested runtime mapping
+- collection runtime mapping
+- multi-source maps
+
 ## Constructor Mapping
 
 OctoMap can create destinations through constructors. If a destination does not expose a public parameterless constructor, OctoMap tries to match public constructor parameters to readable source properties by name.
@@ -553,8 +589,13 @@ Expected output:
 
 ```text
 Configured map: 100 - Grace Hopper - internal 'ignored'
+Constructor map: 100 - Grace Hopper
 Implicit map: OCTO-001 - 49.95
-Resolver, value converter, nested map, collection map: 700 - NEW - No description - Order #0700 is Created - 149.99 USD - Katherine Johnson - 2 items
+Reverse map: OCTO-001 - 49.95
+Projection map: OCTO-PROJ - 19.95
+EF SQLite projection map: OCTO-SQLITE - 29.95
+Resolver, value converter, nested map, collection map, flattening: 700 - NEW - No description - Order #0700 is Created - 149.99 USD - Katherine Johnson - Katherine - 2 items
+Generated expressions: OCTO-HOODIE - 109.97 - remainder 1 - can ship True
 Interface map: WH-42
 Multi-source map: 701 - Ada - Priority order - Ada
 ```
@@ -575,11 +616,12 @@ dotnet run -c Release -f net8.0 --project benchmarks/OctoMap.Benchmarks/OctoMap.
 
 ## Current Status
 
-OctoMap is in early alpha. The core runtime path, explicit maps, runtime implicit single-source maps, interface-based map registration, explicit multi-source maps, nested mapping, collection mapping, DI resolvers, value converters, validation, tests, sample project, and DynaBee-backed generation are implemented.
+OctoMap is in early alpha. The core runtime path, explicit maps, runtime implicit single-source maps, interface-based map registration, explicit multi-source maps, nested mapping, collection mapping, DI resolvers, value converters, validation, first-pass projection mapping, tests, sample project, and DynaBee-backed generation are implemented.
 
 Upcoming areas include:
 
 - broader expression support
+- deeper projection support
 - richer collection destination support
 - item converters for collection members
 - richer diagnostics

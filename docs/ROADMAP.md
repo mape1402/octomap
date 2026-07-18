@@ -30,6 +30,7 @@ These capabilities are already implemented or have an initial working version:
 - record and immutable DTO construction by convention
 - convention flattening for single-source maps
 - basic `ReverseMap()`
+- first-pass `ProjectTo(...)` expression projection
 - README, API docs, architecture docs, sample project, and unit tests
 
 ## Core Principles
@@ -55,33 +56,40 @@ Projection support is essential for Entity Framework and other LINQ providers.
 Target API:
 
 ```csharp
-IQueryable<OrderDto> query = db.Orders.ProjectTo<OrderDto>(configuration);
+IQueryable<OrderDto> query = db.Orders.ProjectTo<Order, OrderDto>(mapper);
 ```
 
 or:
 
 ```csharp
-IQueryable<OrderDto> query = db.Orders.ProjectTo<Order, OrderDto>(provider);
+IQueryable<OrderDto> query = mapper.ProjectTo<Order, OrderDto>(db.Orders);
 ```
 
-Required architecture:
+Implemented first pass:
 
-- add `IProjectionExpressionBuilder`
+- add `IOctoProjectionBuilder`
 - keep projection generation separate from `IMappingGenerationBackend`
 - reuse OctoMap configuration and mapping plans where possible
-- add validation for projectable maps
-- expose clear errors for non-projectable features
-
-Initial projection support:
-
 - direct property mapping
 - simple `MapFrom(...)` expressions
 - flattening
 - constructor projection for records and immutable DTOs
 - null-safe nested member access where translatable
-- nested object projection where provider-friendly
+- constants and null substitutes
+- clear errors for non-projectable runtime features
 
-Initial projection exclusions:
+Remaining first-class projection work:
+
+- projection compatibility validation API
+- provider-aware diagnostics
+- nested object projection where provider-friendly
+- collection projection
+- explicit expansion
+- aggregate expressions such as `Count`, `Sum`, `Any`
+- external projection parameters
+- owned entities and complex types
+
+Projection exclusions:
 
 - DI resolvers
 - DI converters
@@ -90,15 +98,6 @@ Initial projection exclusions:
 - complex method calls that EF cannot translate
 - multi-source maps unless modeled explicitly as query joins later
 - object reuse mapping
-
-Future projection support:
-
-- collection projection
-- explicit expansion
-- aggregate expressions such as `Count`, `Sum`, `Any`
-- external projection parameters
-- owned entities and complex types
-- provider-specific capability validation
 
 ### 2. `ForPath(...)`
 

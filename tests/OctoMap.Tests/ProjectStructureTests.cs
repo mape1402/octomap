@@ -54,5 +54,26 @@ namespace OctoMap.Tests
             Assert.DoesNotContain("IDynaBeeBoundMethodInvoker", source, StringComparison.Ordinal);
             Assert.Contains("ICompiledMapInvoker", source, StringComparison.Ordinal);
         }
+
+        [Fact]
+        public void Projection_Builder_Does_Not_Reference_Dynabee()
+        {
+            var sourcePath = Path.GetFullPath(Path.Combine(
+                AppContext.BaseDirectory,
+                "..",
+                "..",
+                "..",
+                "..",
+                "..",
+                "src",
+                "OctoMap",
+                "Projection",
+                "OctoProjectionBuilder.cs"));
+            var source = File.ReadAllText(sourcePath);
+
+            Assert.DoesNotContain("DynaBee", source, StringComparison.Ordinal);
+            Assert.DoesNotContain("Dynabee", source, StringComparison.Ordinal);
+            Assert.DoesNotContain("IMappingGenerationBackend", source, StringComparison.Ordinal);
+        }
     }
 }

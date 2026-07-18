@@ -7,6 +7,7 @@ using OctoMap.DependencyInjection;
 using OctoMap.Generation;
 using OctoMap.Generation.Dynabee;
 using OctoMap.Planning;
+using OctoMap.Projection;
 using OctoMap.Runtime;
 using OctoMap.Validation;
 
@@ -58,6 +59,7 @@ namespace OctoMap
             services.TryAddSingleton<IDynaBeeAssemblyBuilderFactory, DynaBeeAssemblyBuilderFactory>();
             services.AddSingleton<IMappingGenerationBackend, DynabeeMappingGenerationBackend>();
             services.AddSingleton<ICompiledMapRegistry, CompiledMapRegistry>();
+            services.AddSingleton<IOctoProjectionBuilder, OctoProjectionBuilder>();
             services.AddScoped<IMapContextFactory, MapContextFactory>();
             services.AddScoped<IOctoMapper, OctoMapper>();
             services.AddTransient(typeof(IOctoMapper<,>), typeof(OctoMapper<,>));

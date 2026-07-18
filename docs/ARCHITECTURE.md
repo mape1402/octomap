@@ -69,6 +69,7 @@ Primary concepts:
 - `IOctoMapper`
 - `IOctoMapper<TSource, TDestination>`
 - `IOctoMapper<TSource1, TSource2, TDestination>`
+- `IOctoProjectionBuilder`
 - `OctoMapProfile`
 - `IOctoMapConfiguration`
 - `IOctoMapConfigurationBuilder`
@@ -93,9 +94,17 @@ var dto = mapper.Map<CustomerDto>(customer);
 Multi-source usage:
 
 ```csharp
-var dto = mapper.Map<Customer, Account, CustomerAccountDto>(customer, account);
+var dto = mapper.Map<CustomerAccountDto>(SourceSet.Of(customer, account));
+```
 
-var dtoFromParams = mapper.Map<CustomerAccountDto>(customer, account);
+Multi-source maps are explicit-only. OctoMap does not create multi-source maps implicitly and does not use convention matching across multiple sources because property name conflicts become ambiguous quickly.
+
+Projection usage:
+
+```csharp
+var mapper = provider.GetRequiredService<IOctoMapper>();
+
+var query = db.Customers.ProjectTo<Customer, CustomerDto>(mapper);
 ```
 
 Profile-based usage:
@@ -236,25 +245,7 @@ Conventions should be replaceable:
 - `IConstructorBindingConvention`
 - `ICollectionMappingConvention`
 
-For multi-source maps, source discovery should evaluate all source objects in priority order. Explicit member configuration always wins over convention matches.
-
-Multi-source convention example:
-
-```csharp
-var dto = mapper.Map<Customer, Account, CustomerAccountDto>(customer, account);
-```
-
-If `CustomerAccountDto.Name` matches `customer.Name` and `CustomerAccountDto.Balance` matches `account.Balance`, OctoMap should map both by convention.
-
-Ambiguity must be detected:
-
-```text
-Customer.Name
-Account.Name
-Destination.Name
-```
-
-If more than one source member can satisfy one destination member, OctoMap should fail validation unless priority or explicit configuration resolves it.
+Multi-source maps intentionally skip convention matching. Every destination member must be explicitly configured from a source contribution or from the multi-source context. This keeps ambiguous cases obvious instead of trying to guess between matching property names across several sources.
 
 ## Implicit Runtime Mapping
 
@@ -621,11 +612,11 @@ OctoMap should eventually support:
 
 ## Projection Support
 
-AutoMapper has `ProjectTo`. OctoMap should support projections, but it should be a separate pipeline.
+AutoMapper has `ProjectTo`. OctoMap supports a first projection pass through a separate pipeline.
 
 Projection should not reuse runtime IL mapping blindly because query providers need expression trees.
 
-Suggested model:
+Current model:
 
 ```text
 Runtime Map Plan -> Generated IL Mapper
@@ -635,11 +626,25 @@ Projection Plan  -> Expression<Func<TSource, TDestination>>
 Public API:
 
 ```csharp
-IQueryable<TDestination> ProjectTo<TDestination>(IQueryable source);
-Expression<Func<TSource, TDestination>> CreateProjection<TSource, TDestination>();
+Expression<Func<TSource, TDestination>> projection =
+    projectionBuilder.Build<TSource, TDestination>();
+
+IQueryable<TDestination> query =
+    source.ProjectTo<TSource, TDestination>(mapper);
 ```
 
-Projection support can be implemented after core runtime mapping.
+`IOctoMapper` is the ergonomic projection facade for application code. The projection builder depends on OctoMap configuration, validation, and planning. It does not depend on DynaBee or `IMappingGenerationBackend`.
+
+First-pass projection supports:
+
+- direct member assignment
+- configured `MapFrom(...)`
+- constants
+- null substitutes
+- convention flattening
+- constructor projection
+
+Runtime-only features such as DI resolvers, DI converters, nested runtime mapping, collection runtime mapping, and multi-source maps are rejected with clear errors.
 
 ## Backend Strategy
 
@@ -749,6 +754,8 @@ Start as one package to keep the API cohesive.
 
 - expression projection builder
 - IQueryable integration
+- projection compatibility diagnostics
+- nested and collection projections where provider-friendly
 
 ## Design Principles
 
