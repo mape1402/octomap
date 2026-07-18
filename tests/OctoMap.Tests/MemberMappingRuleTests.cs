@@ -70,6 +70,28 @@ namespace OctoMap.Tests
             Assert.Equal("Fallback", destination.Name);
         }
 
+        [Fact]
+        public void MapFrom_Uses_Instance_And_Static_Method_Calls()
+        {
+            var services = new ServiceCollection();
+            services.AddOctoMap(typeof(MethodCallRuleProfile).Assembly);
+
+            var provider = services.BuildServiceProvider();
+            var mapper = provider.GetRequiredService<IOctoMapper>();
+
+            var destination = mapper.Map<MethodCallSource, MethodCallDestination>(new MethodCallSource
+            {
+                Name = "  ada lovelace  ",
+                Prefix = "ORD",
+                Number = 42,
+                Amount = 12.345m
+            });
+
+            Assert.Equal("ADA LOVELACE", destination.NormalizedName);
+            Assert.Equal("ORD-42", destination.Code);
+            Assert.Equal(12.34m, destination.RoundedAmount);
+        }
+
         public sealed class MemberRuleProfile : OctoMapProfile
         {
             public override void Configure(IOctoMapConfigurationBuilder builder)
@@ -91,6 +113,20 @@ namespace OctoMap.Tests
                     .ForMember(x => x.Name, x => x.MapFrom(s => s.DisplayName ?? s.FallbackName ?? "Unknown"));
             }
         }
+
+        public sealed class MethodCallRuleProfile : OctoMapProfile
+        {
+            public override void Configure(IOctoMapConfigurationBuilder builder)
+            {
+                builder.CreateMap<MethodCallSource, MethodCallDestination>()
+                    .ForMember(x => x.NormalizedName, x => x.MapFrom(s => s.Name.Trim().ToUpperInvariant()))
+                    .ForMember(x => x.Code, x => x.MapFrom(s => BuildCode(s.Prefix, s.Number)))
+                    .ForMember(x => x.RoundedAmount, x => x.MapFrom(s => decimal.Round(s.Amount, 2)));
+            }
+        }
+
+        public static string BuildCode(string prefix, int number)
+            => string.Concat(prefix, "-", number);
 
         public sealed class Person
         {
@@ -138,6 +174,26 @@ namespace OctoMap.Tests
             public bool CanShip { get; set; }
 
             public string Name { get; set; }
+        }
+
+        public sealed class MethodCallSource
+        {
+            public string Name { get; set; }
+
+            public string Prefix { get; set; }
+
+            public int Number { get; set; }
+
+            public decimal Amount { get; set; }
+        }
+
+        public sealed class MethodCallDestination
+        {
+            public string NormalizedName { get; set; }
+
+            public string Code { get; set; }
+
+            public decimal RoundedAmount { get; set; }
         }
     }
 }

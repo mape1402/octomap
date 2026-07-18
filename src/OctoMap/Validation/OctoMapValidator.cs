@@ -118,6 +118,9 @@ namespace OctoMap.Validation
             {
                 case ParameterExpression parameter when ReferenceEquals(parameter, sourceParameter):
                     return;
+                case MethodCallExpression call:
+                    ValidateMethodCall(map, memberMap, call, sourceParameter, issues);
+                    return;
                 case MemberExpression member:
                     if (member.Expression != null)
                     {
@@ -271,14 +274,47 @@ namespace OctoMap.Validation
             ParameterExpression sourceParameter,
             List<OctoMapValidationIssue> issues)
         {
-            if (!ReferenceEquals(expression.Object, sourceParameter)
-                || !expression.Method.IsGenericMethod
-                || expression.Method.GetGenericMethodDefinition() != typeof(IMultiSourceMapContext).GetMethod(nameof(IMultiSourceMapContext.Get)))
+            if (IsMultiSourceGetCall(expression, sourceParameter))
             {
-                issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"Method call '{expression.Method.Name}' is not supported in multi-source MapFrom expressions."));
+                ValidateMultiSourceGetCall(map, memberMap, expression, issues);
                 return;
             }
 
+            if (expression.Object != null)
+            {
+                ValidateMultiSourceExpression(map, memberMap, expression.Object, sourceParameter, issues);
+            }
+
+            foreach (var argument in expression.Arguments)
+            {
+                ValidateMultiSourceExpression(map, memberMap, argument, sourceParameter, issues);
+            }
+        }
+
+        private static void ValidateMethodCall(
+            ITypeMap map,
+            MemberMap memberMap,
+            MethodCallExpression expression,
+            ParameterExpression sourceParameter,
+            List<OctoMapValidationIssue> issues)
+        {
+            if (expression.Object != null)
+            {
+                ValidateExpression(map, memberMap, expression.Object, sourceParameter, issues);
+            }
+
+            foreach (var argument in expression.Arguments)
+            {
+                ValidateExpression(map, memberMap, argument, sourceParameter, issues);
+            }
+        }
+
+        private static void ValidateMultiSourceGetCall(
+            MultiSourceTypeMap map,
+            MultiSourceMemberMap memberMap,
+            MethodCallExpression expression,
+            List<OctoMapValidationIssue> issues)
+        {
             var requestedType = expression.Method.GetGenericArguments()[0];
             var matchingSources = map.SourceTypes.Where(requestedType.IsAssignableFrom).ToArray();
             if (matchingSources.Length == 0)
@@ -292,6 +328,11 @@ namespace OctoMap.Validation
                 issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"Multi-source map has more than one source assignable to '{requestedType.FullName}'."));
             }
         }
+
+        private static bool IsMultiSourceGetCall(MethodCallExpression expression, ParameterExpression sourceParameter)
+            => ReferenceEquals(expression.Object, sourceParameter)
+                && expression.Method.IsGenericMethod
+                && expression.Method.GetGenericMethodDefinition() == typeof(IMultiSourceMapContext).GetMethod(nameof(IMultiSourceMapContext.Get));
 
         private static bool IsSupportedBinaryExpression(ExpressionType nodeType)
             => nodeType == ExpressionType.Add

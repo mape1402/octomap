@@ -25,7 +25,7 @@ namespace OctoMap.Tests
             Assert.Equal(42, destination.OrderId);
             Assert.Equal(125.50m, destination.Total);
             Assert.Equal("Ada Lovelace", destination.CustomerName);
-            Assert.Equal("ORD-42 - Ada Lovelace", destination.Label);
+            Assert.Equal("ORD-42 - ADA LOVELACE", destination.Label);
         }
 
         [Fact]
@@ -99,7 +99,7 @@ namespace OctoMap.Tests
                     .From<OrderSummaryCustomer>(map => map
                         .ForMember(x => x.CustomerName, x => x.MapFrom(s => s.Name)))
                     .ForMember(x => x.Label, x => x.MapFrom(ctx =>
-                        ctx.Get<OrderSummaryOrder>().Code + " - " + ctx.Get<OrderSummaryCustomer>().Name));
+                        string.Concat(ctx.Get<OrderSummaryOrder>().Code.Trim(), " - ", ctx.Get<OrderSummaryCustomer>().Name.ToUpperInvariant())));
             }
         }
 

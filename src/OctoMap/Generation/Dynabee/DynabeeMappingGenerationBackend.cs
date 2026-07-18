@@ -416,7 +416,7 @@ namespace OctoMap.Generation.Dynabee
                         BuildExpression(body, sources, conditional.IfTrue, sourceParameter, sourceIndex),
                         BuildExpression(body, sources, conditional.IfFalse, sourceParameter, sourceIndex));
                 case MethodCallExpression call:
-                    return BuildMethodCallExpression(sources, call, sourceParameter);
+                    return BuildMethodCallExpression(body, sources, call, sourceParameter, sourceIndex);
                 default:
                     throw new NotSupportedException($"Expression node '{expression.NodeType}' is not supported by the current OctoMap expression generator.");
             }
@@ -531,9 +531,11 @@ namespace OctoMap.Generation.Dynabee
         }
 
         private static IBeeValueExpression BuildMethodCallExpression(
+            IBeeMethodBodyBuilder body,
             IReadOnlyList<IBeeValueExpression> sources,
             MethodCallExpression expression,
-            ParameterExpression sourceParameter)
+            ParameterExpression sourceParameter,
+            int sourceIndex)
         {
             if (ReferenceEquals(expression.Object, sourceParameter)
                 && expression.Method.IsGenericMethod
@@ -549,7 +551,22 @@ namespace OctoMap.Generation.Dynabee
                 }
             }
 
-            throw new NotSupportedException($"Method call '{expression.Method.Name}' is not supported by the current OctoMap multi-source expression generator.");
+            var arguments = expression.Arguments
+                .Select(argument => BuildExpression(body, sources, argument, sourceParameter, sourceIndex))
+                .ToArray();
+
+            if (expression.Method.IsStatic)
+            {
+                return body.StaticCall(expression.Method, arguments);
+            }
+
+            if (expression.Object == null)
+            {
+                throw new NotSupportedException($"Method call '{expression.Method.Name}' does not declare an instance expression.");
+            }
+
+            var instance = BuildExpression(body, sources, expression.Object, sourceParameter, sourceIndex);
+            return body.Call(instance, expression.Method, arguments);
         }
 
         private static IBeeValueExpression ApplyNullSubstitute(

@@ -58,7 +58,7 @@ namespace OctoMap.Tests
             public override void Configure(IOctoMapConfigurationBuilder builder)
             {
                 builder.CreateMap<ValidationSource, ValidationDestination>()
-                    .ForMember(x => x.Name, x => x.MapFrom(s => s.Name.ToUpperInvariant()));
+                    .ForMember(x => x.Name, x => x.MapFrom(s => new string('x', 1)));
             }
         }
 

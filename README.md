@@ -137,13 +137,14 @@ Supported member rules:
 - `NullSubstitute(...)`: replaces null source results for reference-type destination members.
 - `Ignore()`: excludes a destination member.
 
-`MapFrom(...)` supports common generated expression shapes, including member access, constants, conversions, conditional expressions, arithmetic, comparisons, short-circuiting boolean logic, boolean negation, null coalescing, and string concatenation.
+`MapFrom(...)` supports common generated expression shapes, including member access, constants, conversions, conditional expressions, arithmetic, comparisons, short-circuiting boolean logic, boolean negation, null coalescing, string concatenation, instance method calls, and static method calls.
 
 ```csharp
 builder.CreateMap<OrderLine, OrderLineDto>()
     .ForMember(x => x.Total, x => x.MapFrom(s => (s.UnitPrice * s.Quantity) - s.Discount))
     .ForMember(x => x.CanShip, x => x.MapFrom(s => s.IsActive && s.Quantity > 0 && !s.IsDeleted))
-    .ForMember(x => x.DisplayName, x => x.MapFrom(s => s.DisplayName ?? s.Sku ?? "Unknown"));
+    .ForMember(x => x.DisplayName, x => x.MapFrom(s => (s.DisplayName ?? s.Sku ?? "Unknown").Trim().ToUpperInvariant()))
+    .ForMember(x => x.RoundedTotal, x => x.MapFrom(s => decimal.Round(s.Total, 2)));
 ```
 
 ## DI-Based Value Converters
