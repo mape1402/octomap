@@ -184,6 +184,10 @@ namespace OctoMap.Generation.Dynabee
             {
                 value = BuildNestedMapValue(body, sources, context, assignment);
             }
+            else if (assignment.UseFlattenedMap)
+            {
+                value = BuildFlattenedMapValue(body, sources, assignment);
+            }
             else
             {
                 var source = sources[assignment.SourceIndex];
@@ -417,6 +421,56 @@ namespace OctoMap.Generation.Dynabee
                 body.Default(assignment.DestinationProperty.PropertyType),
                 mappedValue);
         }
+
+        private static IBeeValueExpression BuildFlattenedMapValue(
+            IBeeMethodBodyBuilder body,
+            IReadOnlyList<IBeeValueExpression> sources,
+            MemberAssignmentPlan assignment)
+        {
+            var flattenedValue = body.DeclareLocal($"flattened_{assignment.DestinationProperty.Name}", assignment.DestinationProperty.PropertyType);
+            body.Assign(flattenedValue, body.Default(assignment.DestinationProperty.PropertyType));
+
+            var current = sources[assignment.SourceIndex];
+            var nullChecks = new List<IBeeValueExpression>();
+            for (var index = 0; index < assignment.SourcePath.Count; index++)
+            {
+                current = body.Property(current, assignment.SourcePath[index].Name);
+                if (index < assignment.SourcePath.Count - 1 && CanBeNull(current.Type))
+                {
+                    nullChecks.Add(body.Not(body.IsNull(current)));
+                }
+            }
+
+            var finalValue = current.Type == assignment.DestinationProperty.PropertyType
+                ? current
+                : body.Convert(current, assignment.DestinationProperty.PropertyType);
+
+            if (nullChecks.Count == 0)
+            {
+                body.Assign(flattenedValue, finalValue);
+                return flattenedValue;
+            }
+
+            body.If(
+                CombineAndAlso(body, nullChecks),
+                whenTrue => whenTrue.Assign(flattenedValue, finalValue));
+
+            return flattenedValue;
+        }
+
+        private static IBeeValueExpression CombineAndAlso(IBeeMethodBodyBuilder body, IReadOnlyList<IBeeValueExpression> expressions)
+        {
+            var combined = expressions[0];
+            for (var index = 1; index < expressions.Count; index++)
+            {
+                combined = body.AndAlso(combined, expressions[index]);
+            }
+
+            return combined;
+        }
+
+        private static bool CanBeNull(Type type)
+            => !type.IsValueType || Nullable.GetUnderlyingType(type) != null;
 
         private static IBeeValueExpression BuildExpression(
             IBeeMethodBodyBuilder body,

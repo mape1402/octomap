@@ -66,7 +66,7 @@ namespace OctoMap.Samples.Basic
                 }
             });
 
-            Console.WriteLine($"Resolver, value converter, nested map, collection map: {orderDto.Id} - {orderDto.Status} - {orderDto.Description} - {orderDto.StatusLabel} - {orderDto.TotalText} - {orderDto.Customer.FullName} - {orderDto.Items.Count} items");
+            Console.WriteLine($"Resolver, value converter, nested map, collection map, flattening: {orderDto.Id} - {orderDto.Status} - {orderDto.Description} - {orderDto.StatusLabel} - {orderDto.TotalText} - {orderDto.Customer.FullName} - {orderDto.CustomerFirstName} - {orderDto.Items.Count} items");
 
             var orderLineDto = _mapper.Map<OrderLine, OrderLineDto>(new OrderLine
             {

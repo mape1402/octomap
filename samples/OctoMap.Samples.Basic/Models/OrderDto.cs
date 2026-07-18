@@ -36,6 +36,11 @@ namespace OctoMap.Samples.Basic.Models
         public CustomerDto Customer { get; set; }
 
         /// <summary>
+        /// Gets or sets the flattened customer first name.
+        /// </summary>
+        public string CustomerFirstName { get; set; }
+
+        /// <summary>
         /// Gets or sets the order items.
         /// </summary>
         public IReadOnlyList<OrderItemDto> Items { get; set; }

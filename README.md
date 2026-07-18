@@ -304,6 +304,31 @@ The generated `Order -> OrderDto` mapper calls the cached `Customer -> CustomerD
 
 If a nested child map is not configured and runtime implicit maps are enabled, OctoMap can create the child map by convention. If runtime implicit maps are disabled, the map fails with a clear runtime configuration error.
 
+## Flattening
+
+Single-source maps support flattening by convention. If a destination member name can be split into a readable source property path, OctoMap maps that path directly.
+
+```csharp
+public sealed class Order
+{
+    public Customer Customer { get; set; }
+}
+
+public sealed class Customer
+{
+    public string Name { get; set; }
+}
+
+public sealed class OrderDto
+{
+    public string CustomerName { get; set; }
+}
+
+builder.CreateMap<Order, OrderDto>();
+```
+
+This maps `Order.Customer.Name` to `OrderDto.CustomerName`. If an intermediate source object is null, OctoMap assigns the destination member default value. Flattening is currently single-source only; multi-source maps must configure those members explicitly.
+
 ## Collection Mapping
 
 OctoMap supports collection member mapping by convention when the source and destination property names match and the element types are assignable or mappable.

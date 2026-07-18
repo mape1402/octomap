@@ -93,6 +93,11 @@ namespace OctoMap.Planning
 
                 if (!sourceProperties.TryGetValue(destinationProperty.Name, out var sourceProperty))
                 {
+                    if (TryCreateFlattenedAssignment(destinationProperty, sourceProperties, out var flattenedAssignment))
+                    {
+                        assignments.Add(flattenedAssignment);
+                    }
+
                     continue;
                 }
 
@@ -426,6 +431,116 @@ namespace OctoMap.Planning
                 false,
                 null,
                 0);
+            return true;
+        }
+
+        private static bool TryCreateFlattenedAssignment(
+            PropertyInfo destinationProperty,
+            IReadOnlyDictionary<string, PropertyInfo> sourceProperties,
+            out MemberAssignmentPlan assignment)
+        {
+            assignment = null;
+            if (!TryResolveSourcePath(destinationProperty.Name, sourceProperties.Values, out var sourcePath))
+            {
+                return false;
+            }
+
+            var sourceValueType = sourcePath[^1].PropertyType;
+            if (!destinationProperty.PropertyType.IsAssignableFrom(sourceValueType))
+            {
+                return false;
+            }
+
+            assignment = new MemberAssignmentPlan(
+                destinationProperty,
+                sourcePath[0],
+                null,
+                null,
+                null,
+                null,
+                false,
+                CollectionShape.None,
+                CollectionShape.None,
+                null,
+                null,
+                true,
+                false,
+                null,
+                false,
+                null,
+                0,
+                sourcePath);
+            return true;
+        }
+
+        private static bool TryResolveSourcePath(
+            string destinationName,
+            IEnumerable<PropertyInfo> sourceProperties,
+            out IReadOnlyList<PropertyInfo> sourcePath)
+        {
+            foreach (var sourceProperty in sourceProperties
+                .Where(x => IsFlattenableSourceType(x.PropertyType))
+                .OrderByDescending(x => x.Name.Length)
+                .ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase))
+            {
+                if (!destinationName.StartsWith(sourceProperty.Name, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var remainingName = destinationName[sourceProperty.Name.Length..];
+                if (string.IsNullOrWhiteSpace(remainingName))
+                {
+                    continue;
+                }
+
+                if (TryResolveSourcePath(remainingName, sourceProperty.PropertyType, out var nestedPath))
+                {
+                    sourcePath = new[] { sourceProperty }.Concat(nestedPath).ToArray();
+                    return true;
+                }
+            }
+
+            sourcePath = null;
+            return false;
+        }
+
+        private static bool TryResolveSourcePath(string destinationName, Type sourceType, out IReadOnlyList<PropertyInfo> sourcePath)
+        {
+            var sourceProperties = sourceType
+                .GetProperties(BindingFlags.Instance | BindingFlags.Public)
+                .Where(x => x.CanRead && x.GetMethod != null)
+                .ToArray();
+
+            var directProperty = sourceProperties
+                .FirstOrDefault(x => string.Equals(x.Name, destinationName, StringComparison.OrdinalIgnoreCase));
+            if (directProperty != null)
+            {
+                sourcePath = new[] { directProperty };
+                return true;
+            }
+
+            return TryResolveSourcePath(destinationName, sourceProperties, out sourcePath);
+        }
+
+        private static bool IsFlattenableSourceType(Type type)
+        {
+            var underlyingType = Nullable.GetUnderlyingType(type) ?? type;
+            if (underlyingType == typeof(string))
+            {
+                return false;
+            }
+
+            if (underlyingType.IsPrimitive || underlyingType.IsEnum)
+            {
+                return false;
+            }
+
+            if (typeof(System.Collections.IEnumerable).IsAssignableFrom(underlyingType))
+            {
+                return false;
+            }
+
             return true;
         }
 

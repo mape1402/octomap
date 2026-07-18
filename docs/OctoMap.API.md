@@ -110,6 +110,21 @@ When enabled, `mapper.Map<TDestination>(source)` can create and cache a conventi
 
 Runtime implicit maps do not apply to multi-source maps.
 
+## Flattening
+
+Single-source maps support flattened destination members by convention.
+
+```csharp
+public sealed class OrderDto
+{
+    public string CustomerName { get; set; }
+}
+
+builder.CreateMap<Order, OrderDto>();
+```
+
+OctoMap can map `Order.Customer.Name` to `OrderDto.CustomerName` when the source path is readable and the final source value is assignable to the destination member. Intermediate null source objects produce the destination member default value. Flattening is not applied to multi-source maps.
+
 ## Multi-Source Maps
 
 ```csharp

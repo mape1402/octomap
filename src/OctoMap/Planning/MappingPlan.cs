@@ -120,6 +120,7 @@ namespace OctoMap.Planning
         /// <param name="hasNullSubstitute">A value indicating whether this assignment has a null substitute.</param>
         /// <param name="nullSubstitute">The null substitute value.</param>
         /// <param name="sourceIndex">The source index.</param>
+        /// <param name="sourcePath">The source property path.</param>
         public MemberAssignmentPlan(
             PropertyInfo destinationProperty,
             PropertyInfo sourceProperty,
@@ -137,7 +138,8 @@ namespace OctoMap.Planning
             object constantValue,
             bool hasNullSubstitute,
             object nullSubstitute,
-            int sourceIndex)
+            int sourceIndex,
+            IReadOnlyList<PropertyInfo> sourcePath = null)
         {
             DestinationProperty = destinationProperty ?? throw new ArgumentNullException(nameof(destinationProperty));
             SourceProperty = sourceProperty;
@@ -156,6 +158,7 @@ namespace OctoMap.Planning
             HasNullSubstitute = hasNullSubstitute;
             NullSubstitute = nullSubstitute;
             SourceIndex = sourceIndex;
+            SourcePath = sourcePath ?? Array.Empty<PropertyInfo>();
         }
 
         /// <summary>
@@ -242,6 +245,16 @@ namespace OctoMap.Planning
         /// Gets the source index.
         /// </summary>
         public int SourceIndex { get; }
+
+        /// <summary>
+        /// Gets the source property path used for flattened member mapping.
+        /// </summary>
+        public IReadOnlyList<PropertyInfo> SourcePath { get; }
+
+        /// <summary>
+        /// Gets whether the assignment uses flattened source member mapping.
+        /// </summary>
+        public bool UseFlattenedMap => SourcePath.Count > 0;
 
         /// <summary>
         /// Gets the destination property.
