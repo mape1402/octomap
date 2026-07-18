@@ -13,16 +13,32 @@ namespace OctoMap.Configuration
         /// <inheritdoc/>
         public IMapExpression<TSource, TDestination> CreateMap<TSource, TDestination>()
         {
-            var map = new TypeMap(typeof(TSource), typeof(TDestination), false);
-            _maps[new MapKey(map.SourceType, map.DestinationType)] = map;
-            return new MapExpression<TSource, TDestination>(map);
+            var map = GetOrCreateMap(typeof(TSource), typeof(TDestination));
+            return new MapExpression<TSource, TDestination>(map, this);
         }
 
         /// <inheritdoc/>
         public void CreateMap(Type sourceType, Type destinationType)
         {
-            var map = new TypeMap(sourceType, destinationType, false);
-            _maps[new MapKey(map.SourceType, map.DestinationType)] = map;
+            GetOrCreateMap(sourceType, destinationType);
+        }
+
+        /// <summary>
+        /// Gets or creates a configured type map.
+        /// </summary>
+        /// <param name="sourceType">The source type.</param>
+        /// <param name="destinationType">The destination type.</param>
+        /// <returns>The configured type map.</returns>
+        internal TypeMap GetOrCreateMap(Type sourceType, Type destinationType)
+        {
+            var key = new MapKey(sourceType, destinationType);
+            if (!_maps.TryGetValue(key, out var map))
+            {
+                map = new TypeMap(sourceType, destinationType, false);
+                _maps[key] = map;
+            }
+
+            return map;
         }
 
         /// <inheritdoc/>

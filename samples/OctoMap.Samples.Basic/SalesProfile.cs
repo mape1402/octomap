@@ -17,6 +17,9 @@ namespace OctoMap.Samples.Basic
             builder.CreateMap<Customer, CustomerRecordDto>()
                 .ConstructUsing(s => new CustomerRecordDto(s.Id, string.Concat(s.FirstName.Trim(), " ", s.LastName.Trim())));
 
+            builder.CreateMap<Product, ProductDto>()
+                .ReverseMap();
+
             builder.CreateMap<OrderItem, OrderItemDto>()
                 .ForMember(x => x.Label, x => x.MapFrom(s => s.Sku + " x " + s.Quantity));
 

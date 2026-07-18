@@ -256,6 +256,25 @@ public sealed class ProductDto
 
 Runtime implicit maps are single-source only. Multi-source maps must be configured explicitly.
 
+## Reverse Mapping
+
+Single-source maps can register a basic reverse map.
+
+```csharp
+builder.CreateMap<Product, ProductDto>()
+    .ReverseMap();
+```
+
+The reverse map supports convention member matching and direct reversible `MapFrom(...)` rules.
+
+```csharp
+builder.CreateMap<Customer, CustomerDto>()
+    .ForMember(x => x.DisplayName, x => x.MapFrom(s => s.Name))
+    .ReverseMap();
+```
+
+This can map `CustomerDto.DisplayName` back to `Customer.Name`. Reverse mapping does not currently reverse resolvers, converters, flattening, unflattening, complex expressions, or multi-source maps.
+
 ## Constructor Mapping
 
 OctoMap can create destinations through constructors. If a destination does not expose a public parameterless constructor, OctoMap tries to match public constructor parameters to readable source properties by name.

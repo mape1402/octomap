@@ -50,6 +50,21 @@ builder.CreateMap<Customer, CustomerDto>()
     .ForMember(x => x.InternalCode, x => x.Ignore());
 ```
 
+### Reverse Maps
+
+```csharp
+IMapExpression<TDestination, TSource> ReverseMap();
+```
+
+`ReverseMap()` registers a basic reverse single-source map and returns its expression for additional configuration.
+
+```csharp
+builder.CreateMap<Product, ProductDto>()
+    .ReverseMap();
+```
+
+Reverse maps support convention member matching and direct reversible `MapFrom(...)` rules. Resolvers, converters, flattening, unflattening, complex expressions, and multi-source maps are not reversed automatically.
+
 ### Member Rules
 
 ```csharp

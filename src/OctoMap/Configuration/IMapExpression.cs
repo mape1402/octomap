@@ -10,6 +10,12 @@ namespace OctoMap
     public interface IMapExpression<TSource, TDestination>
     {
         /// <summary>
+        /// Creates and returns the reverse map expression.
+        /// </summary>
+        /// <returns>The reverse map expression.</returns>
+        IMapExpression<TDestination, TSource> ReverseMap();
+
+        /// <summary>
         /// Configures how the destination object is constructed.
         /// </summary>
         /// <param name="constructionExpression">The destination construction expression.</param>

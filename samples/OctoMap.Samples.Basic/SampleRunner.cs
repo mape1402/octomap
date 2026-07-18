@@ -45,6 +45,9 @@ namespace OctoMap.Samples.Basic
 
             Console.WriteLine($"Implicit map: {productDto.Sku} - {productDto.Price}");
 
+            var reversedProduct = _mapper.Map<ProductDto, Product>(productDto);
+            Console.WriteLine($"Reverse map: {reversedProduct.Sku} - {reversedProduct.Price}");
+
             var orderDto = _mapper.Map<Order, OrderDto>(new Order
             {
                 Id = 700,
