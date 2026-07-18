@@ -54,6 +54,16 @@ namespace OctoMap.Configuration
         public LambdaExpression SourceExpression { get; set; }
 
         /// <summary>
+        /// Gets or sets the precondition expression.
+        /// </summary>
+        public LambdaExpression PreConditionExpression { get; set; }
+
+        /// <summary>
+        /// Gets or sets the assignment condition expression.
+        /// </summary>
+        public LambdaExpression ConditionExpression { get; set; }
+
+        /// <summary>
         /// Gets or sets the resolver type.
         /// </summary>
         public Type ResolverType { get; set; }

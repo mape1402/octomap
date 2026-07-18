@@ -70,11 +70,28 @@ Reverse maps support convention member matching and direct reversible `MapFrom(.
 ```csharp
 void Ignore();
 void MapFrom(Expression<Func<TSource, TMember>> sourceExpression);
+void PreCondition(Expression<Func<TSource, bool>> conditionExpression);
+void Condition(Expression<Func<TSource, bool>> conditionExpression);
+void Condition(Expression<Func<TSource, TMember, bool>> conditionExpression);
 void ResolveUsing<TResolver>()
     where TResolver : IValueResolver<TSource, TDestination, TMember>;
 void UseValue(TMember value);
 void NullSubstitute(TMember value);
 ```
+
+### Conditional Members
+
+```csharp
+builder.CreateMap<OrderLine, OrderLineDto>()
+    .ForMember(x => x.DisplayName, x =>
+    {
+        x.MapFrom(s => s.DisplayName);
+        x.PreCondition(s => s.IsActive);
+        x.Condition((source, value) => value != "skip");
+    });
+```
+
+`PreCondition(...)` runs before value resolution. `Condition(...)` runs after value resolution and before assignment. Runtime mapping supports conditional members for direct members, resolvers, converters, nested maps, collection maps, destination paths, and source contributions in multi-source maps. Projection support for conditional mapping is not implemented yet.
 
 ### Destination Paths
 

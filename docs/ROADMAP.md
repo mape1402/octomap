@@ -33,6 +33,7 @@ These capabilities are already implemented or have an initial working version:
 - first-pass `ProjectTo(...)` expression projection
 - first-pass `ForPath(...)` runtime destination path mapping
 - first-pass mapping plan inspection and description
+- first-pass runtime conditional mapping
 - README, API docs, architecture docs, sample project, and unit tests
 
 ## Core Principles
@@ -189,14 +190,10 @@ builder.CreateMap<Order, OrderDto>()
     .ForMember(x => x.Total, x => x.PreCondition(s => s.Status != "Cancelled"));
 ```
 
-Semantics:
+Implemented first pass:
 
 - `PreCondition(...)` runs before resolving a member value.
 - `Condition(...)` runs after resolving a member value and before assignment.
-- conditions should support generated expression bodies through DynaBee.
-
-Compatibility targets:
-
 - convention mapping
 - `MapFrom(...)`
 - constants
@@ -205,10 +202,15 @@ Compatibility targets:
 - resolvers
 - nested mapping
 - collection mapping
+- `ForPath(...)`
+- source contributions in multi-source maps
+- generated expression bodies through DynaBee
 
-Projection note:
+Remaining work:
 
 - conditions may be projectable only when expressed as LINQ-translatable expressions.
+- richer diagnostics in `DescribeMap(...)`
+- context-level multi-source conditions
 
 ### 5. Existing Destination Mapping
 

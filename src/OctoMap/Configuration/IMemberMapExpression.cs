@@ -22,6 +22,24 @@ namespace OctoMap
         void MapFrom(Expression<Func<TSource, TMember>> sourceExpression);
 
         /// <summary>
+        /// Configures a predicate that must pass before resolving the member value.
+        /// </summary>
+        /// <param name="conditionExpression">The precondition expression.</param>
+        void PreCondition(Expression<Func<TSource, bool>> conditionExpression);
+
+        /// <summary>
+        /// Configures a predicate that must pass before assigning the resolved member value.
+        /// </summary>
+        /// <param name="conditionExpression">The condition expression.</param>
+        void Condition(Expression<Func<TSource, bool>> conditionExpression);
+
+        /// <summary>
+        /// Configures a predicate that must pass before assigning the resolved member value.
+        /// </summary>
+        /// <param name="conditionExpression">The condition expression.</param>
+        void Condition(Expression<Func<TSource, TMember, bool>> conditionExpression);
+
+        /// <summary>
         /// Converts a source member value through a service resolved from the mapping context service provider.
         /// </summary>
         /// <typeparam name="TConverter">The converter type.</typeparam>

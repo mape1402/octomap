@@ -121,6 +121,16 @@ namespace OctoMap.Validation
                 }
             }
 
+            if (memberMap.PreConditionExpression != null)
+            {
+                ValidateConditionExpression(map, memberMap, memberMap.PreConditionExpression, true, issues);
+            }
+
+            if (memberMap.ConditionExpression != null)
+            {
+                ValidateConditionExpression(map, memberMap, memberMap.ConditionExpression, false, issues);
+            }
+
             if (memberMap.ResolverType != null)
             {
                 ValidateResolver(map, memberMap, issues);
@@ -147,19 +157,27 @@ namespace OctoMap.Validation
             }
         }
 
-        private static void ValidateExpression(ITypeMap map, MemberMap memberMap, Expression expression, ParameterExpression sourceParameter, List<OctoMapValidationIssue> issues)
+        private static void ValidateExpression(
+            ITypeMap map,
+            MemberMap memberMap,
+            Expression expression,
+            ParameterExpression sourceParameter,
+            List<OctoMapValidationIssue> issues,
+            ParameterExpression valueParameter = null)
         {
             switch (expression)
             {
                 case ParameterExpression parameter when ReferenceEquals(parameter, sourceParameter):
                     return;
+                case ParameterExpression parameter when valueParameter != null && ReferenceEquals(parameter, valueParameter):
+                    return;
                 case MethodCallExpression call:
-                    ValidateMethodCall(map, memberMap, call, sourceParameter, issues);
+                    ValidateMethodCall(map, memberMap, call, sourceParameter, issues, valueParameter);
                     return;
                 case MemberExpression member:
                     if (member.Expression != null)
                     {
-                        ValidateExpression(map, memberMap, member.Expression, sourceParameter, issues);
+                        ValidateExpression(map, memberMap, member.Expression, sourceParameter, issues, valueParameter);
                     }
 
                     if (member.Member is PropertyInfo or FieldInfo)
@@ -173,8 +191,8 @@ namespace OctoMap.Validation
                     ValidateValue(map, GetMemberName(memberMap), constant.Value, constant.Type, "constant expression", issues);
                     return;
                 case BinaryExpression binary:
-                    ValidateExpression(map, memberMap, binary.Left, sourceParameter, issues);
-                    ValidateExpression(map, memberMap, binary.Right, sourceParameter, issues);
+                    ValidateExpression(map, memberMap, binary.Left, sourceParameter, issues, valueParameter);
+                    ValidateExpression(map, memberMap, binary.Right, sourceParameter, issues, valueParameter);
                     if (!IsSupportedBinaryExpression(binary.NodeType))
                     {
                         issues.Add(CreateIssue(map, GetMemberName(memberMap), $"Binary expression '{binary.NodeType}' is not supported in MapFrom expressions."));
@@ -182,26 +200,62 @@ namespace OctoMap.Validation
 
                     return;
                 case UnaryExpression unary when unary.NodeType == ExpressionType.Convert || unary.NodeType == ExpressionType.ConvertChecked:
-                    ValidateExpression(map, memberMap, unary.Operand, sourceParameter, issues);
+                    ValidateExpression(map, memberMap, unary.Operand, sourceParameter, issues, valueParameter);
                     return;
                 case UnaryExpression unary when unary.NodeType == ExpressionType.Not:
-                    ValidateExpression(map, memberMap, unary.Operand, sourceParameter, issues);
+                    ValidateExpression(map, memberMap, unary.Operand, sourceParameter, issues, valueParameter);
                     return;
                 case ConditionalExpression conditional:
-                    ValidateExpression(map, memberMap, conditional.Test, sourceParameter, issues);
-                    ValidateExpression(map, memberMap, conditional.IfTrue, sourceParameter, issues);
-                    ValidateExpression(map, memberMap, conditional.IfFalse, sourceParameter, issues);
+                    ValidateExpression(map, memberMap, conditional.Test, sourceParameter, issues, valueParameter);
+                    ValidateExpression(map, memberMap, conditional.IfTrue, sourceParameter, issues, valueParameter);
+                    ValidateExpression(map, memberMap, conditional.IfFalse, sourceParameter, issues, valueParameter);
                     return;
                 case NewExpression @new:
                     foreach (var argument in @new.Arguments)
                     {
-                        ValidateExpression(map, memberMap, argument, sourceParameter, issues);
+                        ValidateExpression(map, memberMap, argument, sourceParameter, issues, valueParameter);
                     }
 
                     return;
                 default:
                     issues.Add(CreateIssue(map, GetMemberName(memberMap), $"Expression node '{expression.NodeType}' is not supported in MapFrom expressions."));
                     return;
+            }
+        }
+
+        private static void ValidateConditionExpression(
+            ITypeMap map,
+            MemberMap memberMap,
+            LambdaExpression expression,
+            bool isPreCondition,
+            List<OctoMapValidationIssue> issues)
+        {
+            var expectedParameterCount = isPreCondition ? 1 : expression.Parameters.Count;
+            if (expectedParameterCount != expression.Parameters.Count || expression.Parameters.Count is < 1 or > 2)
+            {
+                issues.Add(CreateIssue(map, GetMemberName(memberMap), $"Condition for member '{GetMemberName(memberMap)}' must declare one source parameter or source and value parameters."));
+                return;
+            }
+
+            if (isPreCondition && expression.Parameters.Count != 1)
+            {
+                issues.Add(CreateIssue(map, GetMemberName(memberMap), $"PreCondition for member '{GetMemberName(memberMap)}' must declare one source parameter."));
+                return;
+            }
+
+            if (expression.Parameters.Count == 2
+                && !expression.Parameters[1].Type.IsAssignableFrom(memberMap.DestinationProperty.PropertyType)
+                && !memberMap.DestinationProperty.PropertyType.IsAssignableFrom(expression.Parameters[1].Type))
+            {
+                issues.Add(CreateIssue(map, GetMemberName(memberMap), $"Condition value parameter type '{expression.Parameters[1].Type.FullName}' is not compatible with destination member '{GetMemberName(memberMap)}' of type '{memberMap.DestinationProperty.PropertyType.FullName}'."));
+                return;
+            }
+
+            var valueParameter = expression.Parameters.Count == 2 ? expression.Parameters[1] : null;
+            ValidateExpression(map, memberMap, expression.Body, expression.Parameters[0], issues, valueParameter);
+            if (expression.Body.Type != typeof(bool))
+            {
+                issues.Add(CreateIssue(map, GetMemberName(memberMap), $"Condition for member '{GetMemberName(memberMap)}' must return Boolean."));
             }
         }
 
@@ -401,16 +455,17 @@ namespace OctoMap.Validation
             MemberMap memberMap,
             MethodCallExpression expression,
             ParameterExpression sourceParameter,
-            List<OctoMapValidationIssue> issues)
+            List<OctoMapValidationIssue> issues,
+            ParameterExpression valueParameter = null)
         {
             if (expression.Object != null)
             {
-                ValidateExpression(map, memberMap, expression.Object, sourceParameter, issues);
+                ValidateExpression(map, memberMap, expression.Object, sourceParameter, issues, valueParameter);
             }
 
             foreach (var argument in expression.Arguments)
             {
-                ValidateExpression(map, memberMap, argument, sourceParameter, issues);
+                ValidateExpression(map, memberMap, argument, sourceParameter, issues, valueParameter);
             }
         }
 

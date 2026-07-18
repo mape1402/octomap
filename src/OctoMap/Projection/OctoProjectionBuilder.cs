@@ -70,6 +70,11 @@ namespace OctoMap.Projection
                     throw new NotSupportedException($"Member path '{string.Join(".", assignment.DestinationPath.Select(x => x.Name))}' cannot be projected because nested destination path projection is not supported yet.");
                 }
 
+                if (assignment.PreConditionExpression != null || assignment.ConditionExpression != null)
+                {
+                    throw new NotSupportedException($"Member '{assignment.DestinationProperty.Name}' cannot be projected because conditional mapping is not supported in projections yet.");
+                }
+
                 bindings.Add(Expression.Bind(assignment.DestinationProperty, BuildAssignmentExpression(plan, assignment, source)));
             }
 

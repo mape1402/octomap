@@ -44,6 +44,24 @@ namespace OctoMap.Configuration
         }
 
         /// <inheritdoc/>
+        public void PreCondition(Expression<Func<TSource, bool>> conditionExpression)
+        {
+            _memberMap.PreConditionExpression = conditionExpression ?? throw new ArgumentNullException(nameof(conditionExpression));
+        }
+
+        /// <inheritdoc/>
+        public void Condition(Expression<Func<TSource, bool>> conditionExpression)
+        {
+            _memberMap.ConditionExpression = conditionExpression ?? throw new ArgumentNullException(nameof(conditionExpression));
+        }
+
+        /// <inheritdoc/>
+        public void Condition(Expression<Func<TSource, TMember, bool>> conditionExpression)
+        {
+            _memberMap.ConditionExpression = conditionExpression ?? throw new ArgumentNullException(nameof(conditionExpression));
+        }
+
+        /// <inheritdoc/>
         public void ConvertUsing<TConverter>(Expression<Func<TSource, object>> sourceExpression)
         {
             if (sourceExpression == null)

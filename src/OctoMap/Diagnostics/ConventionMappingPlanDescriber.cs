@@ -18,7 +18,7 @@ namespace OctoMap.Diagnostics
             var lines = new List<string>();
             foreach (var assignment in plan.Assignments)
             {
-                lines.Add($"{GetDestinationPath(plan, assignment)} <- {GetSourceDescription(plan, assignment)}");
+                lines.Add($"{GetDestinationPath(plan, assignment)} <- {GetSourceDescription(plan, assignment)}{GetConditionDescription(plan, assignment)}");
             }
 
             return string.Join(Environment.NewLine, lines);
@@ -65,6 +65,24 @@ namespace OctoMap.Diagnostics
             }
 
             return $"{GetSourcePrefix(plan, assignment)}.{assignment.SourceProperty.Name}";
+        }
+
+        private static string GetConditionDescription(MappingPlan plan, MemberAssignmentPlan assignment)
+        {
+            var conditions = new List<string>();
+            if (assignment.PreConditionExpression != null)
+            {
+                conditions.Add($"pre: {GetExpressionDescription(assignment.PreConditionExpression, GetSourcePrefix(plan, assignment))}");
+            }
+
+            if (assignment.ConditionExpression != null)
+            {
+                conditions.Add($"condition: {GetExpressionDescription(assignment.ConditionExpression, GetSourcePrefix(plan, assignment))}");
+            }
+
+            return conditions.Count == 0
+                ? string.Empty
+                : $" [{string.Join("; ", conditions)}]";
         }
 
         private static string GetSourcePrefix(MappingPlan plan, MemberAssignmentPlan assignment)

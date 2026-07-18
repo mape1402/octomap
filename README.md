@@ -135,6 +135,8 @@ Supported member rules:
 - `ResolveUsing<TResolver>()`: resolves a member through a DI service.
 - `UseValue(...)`: assigns a constant value.
 - `NullSubstitute(...)`: replaces null source results for reference-type destination members.
+- `PreCondition(...)`: skips value resolution and assignment when the source predicate fails.
+- `Condition(...)`: skips assignment when the source or resolved value predicate fails.
 - `Ignore()`: excludes a destination member.
 
 `MapFrom(...)` supports common generated expression shapes, including member access, constants, conversions, conditional expressions, arithmetic, comparisons, short-circuiting boolean logic, boolean negation, null coalescing, string concatenation, instance method calls, and static method calls.
@@ -146,6 +148,32 @@ builder.CreateMap<OrderLine, OrderLineDto>()
     .ForMember(x => x.DisplayName, x => x.MapFrom(s => (s.DisplayName ?? s.Sku ?? "Unknown").Trim().ToUpperInvariant()))
     .ForMember(x => x.RoundedTotal, x => x.MapFrom(s => decimal.Round(s.Total, 2)));
 ```
+
+## Conditional Mapping
+
+Use `PreCondition(...)` when the member should not even resolve its value unless the source predicate passes.
+
+```csharp
+builder.CreateMap<OrderLine, OrderLineDto>()
+    .ForMember(x => x.DisplayName, x =>
+    {
+        x.MapFrom(s => s.DisplayName.Trim().ToUpperInvariant());
+        x.PreCondition(s => s.IsActive);
+    });
+```
+
+Use `Condition(...)` when the value should be resolved first, then conditionally assigned.
+
+```csharp
+builder.CreateMap<OrderLine, OrderLineDto>()
+    .ForMember(x => x.DisplayName, x =>
+    {
+        x.MapFrom(s => s.DisplayName);
+        x.Condition((source, value) => value != "skip");
+    });
+```
+
+`PreCondition(...)` and `Condition(...)` are supported by runtime mapping for direct members, resolvers, converters, nested maps, collection maps, `ForPath(...)`, and source contributions in multi-source maps. Projection support is planned separately.
 
 ## DI-Based Value Converters
 
@@ -307,6 +335,7 @@ Runtime-only features are rejected with clear errors:
 
 - DI resolvers
 - DI value converters
+- conditional mapping
 - nested runtime mapping
 - collection runtime mapping
 - multi-source maps
@@ -631,6 +660,7 @@ EF SQLite projection map: OCTO-SQLITE - 29.95
 Resolver, value converter, nested map, collection map, flattening: 700 - NEW - No description - Order #0700 is Created - 149.99 USD - Katherine Johnson - Katherine - 2 items
 ForPath map: 800 - Dorothy
 Generated expressions: OCTO-HOODIE - 109.97 - remainder 1 - can ship True
+Conditional map: skipped
 Interface map: WH-42
 Multi-source map: 701 - Ada - Priority order - Ada
 ```
@@ -651,7 +681,7 @@ dotnet run -c Release -f net8.0 --project benchmarks/OctoMap.Benchmarks/OctoMap.
 
 ## Current Status
 
-OctoMap is in early alpha. The core runtime path, explicit maps, runtime implicit single-source maps, interface-based map registration, explicit multi-source maps, nested mapping, collection mapping, DI resolvers, value converters, validation, first-pass projection mapping, first-pass plan diagnostics, tests, sample project, and DynaBee-backed generation are implemented.
+OctoMap is in early alpha. The core runtime path, explicit maps, runtime implicit single-source maps, interface-based map registration, explicit multi-source maps, nested mapping, collection mapping, DI resolvers, value converters, conditional mapping, validation, first-pass projection mapping, first-pass plan diagnostics, tests, sample project, and DynaBee-backed generation are implemented.
 
 Upcoming areas include:
 

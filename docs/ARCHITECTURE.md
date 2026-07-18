@@ -312,6 +312,7 @@ Core responsibilities:
 - Decide nested map calls.
 - Decide converter/resolver calls.
 - Decide collection loops.
+- Decide conditional assignment and precondition rules.
 - Decide before/after map actions.
 - Produce diagnostics.
 

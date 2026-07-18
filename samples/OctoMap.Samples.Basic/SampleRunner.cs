@@ -121,6 +121,17 @@ namespace OctoMap.Samples.Basic
 
             Console.WriteLine($"Generated expressions: {orderLineDto.DisplayName} - {orderLineDto.Total} - remainder {orderLineDto.QuantityRemainder} - can ship {orderLineDto.CanShip}");
 
+            var inactiveOrderLineDto = _mapper.Map<OrderLine, OrderLineDto>(new OrderLine
+            {
+                Sku = "OCTO-ARCHIVE",
+                DisplayName = "Archived line",
+                UnitPrice = 12m,
+                Quantity = 1,
+                IsActive = false
+            });
+
+            Console.WriteLine($"Conditional map: {inactiveOrderLineDto.DisplayName ?? "skipped"}");
+
             var registeredByInterface = _mapper.Map<WarehouseItemDto>(new WarehouseItem
             {
                 Code = "WH-42"

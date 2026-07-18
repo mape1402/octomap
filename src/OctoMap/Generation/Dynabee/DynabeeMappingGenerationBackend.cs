@@ -108,12 +108,56 @@ namespace OctoMap.Generation.Dynabee
 
             foreach (var assignment in plan.Assignments)
             {
-                var target = BuildDestinationTarget(body, destination, assignment);
-                var value = BuildAssignmentValue(body, sources, destination, context, assignment);
-                body.Assign(target, value);
+                EmitAssignment(body, sources, destination, context, assignment);
             }
 
             body.Return(destination);
+        }
+
+        private static void EmitAssignment(
+            IBeeMethodBodyBuilder body,
+            IReadOnlyList<IBeeValueExpression> sources,
+            IBeeValueExpression destination,
+            IBeeValueExpression context,
+            MemberAssignmentPlan assignment)
+        {
+            if (assignment.PreConditionExpression != null)
+            {
+                var preCondition = BuildConditionExpression(body, sources, null, assignment.PreConditionExpression, assignment.SourceIndex);
+                body.If(
+                    preCondition,
+                    whenTrue => EmitConditionalAssignment(whenTrue, sources, destination, context, assignment));
+                return;
+            }
+
+            EmitConditionalAssignment(body, sources, destination, context, assignment);
+        }
+
+        private static void EmitConditionalAssignment(
+            IBeeMethodBodyBuilder body,
+            IReadOnlyList<IBeeValueExpression> sources,
+            IBeeValueExpression destination,
+            IBeeValueExpression context,
+            MemberAssignmentPlan assignment)
+        {
+            var value = BuildAssignmentValue(body, sources, destination, context, assignment);
+            if (assignment.ConditionExpression != null)
+            {
+                var resolvedValue = body.DeclareLocal($"resolved_{assignment.DestinationProperty.Name}", value.Type);
+                body.Assign(resolvedValue, value);
+                var condition = BuildConditionExpression(body, sources, resolvedValue, assignment.ConditionExpression, assignment.SourceIndex);
+                body.If(
+                    condition,
+                    whenTrue =>
+                    {
+                        var target = BuildDestinationTarget(whenTrue, destination, assignment);
+                        whenTrue.Assign(target, resolvedValue);
+                    });
+                return;
+            }
+
+            var target = BuildDestinationTarget(body, destination, assignment);
+            body.Assign(target, value);
         }
 
         private static IBeeAssignableExpression BuildDestinationTarget(
@@ -505,34 +549,58 @@ namespace OctoMap.Generation.Dynabee
             IReadOnlyList<IBeeValueExpression> sources,
             Expression expression,
             ParameterExpression sourceParameter,
-            int sourceIndex)
+            int sourceIndex,
+            ParameterExpression valueParameter = null,
+            IBeeValueExpression valueExpression = null)
         {
             switch (expression)
             {
                 case ParameterExpression parameter when ReferenceEquals(parameter, sourceParameter):
                     return sources[sourceIndex];
+                case ParameterExpression parameter when valueParameter != null && ReferenceEquals(parameter, valueParameter):
+                    return valueExpression;
                 case MemberExpression member:
-                    return BuildMemberExpression(body, sources, member, sourceParameter, sourceIndex);
+                    return BuildMemberExpression(body, sources, member, sourceParameter, sourceIndex, valueParameter, valueExpression);
                 case ConstantExpression constant:
                     return body.Constant(constant.Value, constant.Type);
                 case BinaryExpression binary:
-                    return BuildBinaryExpression(body, sources, binary, sourceParameter, sourceIndex);
+                    return BuildBinaryExpression(body, sources, binary, sourceParameter, sourceIndex, valueParameter, valueExpression);
                 case UnaryExpression unary when unary.NodeType == ExpressionType.Convert || unary.NodeType == ExpressionType.ConvertChecked:
-                    return body.Convert(BuildExpression(body, sources, unary.Operand, sourceParameter, sourceIndex), unary.Type);
+                    return body.Convert(BuildExpression(body, sources, unary.Operand, sourceParameter, sourceIndex, valueParameter, valueExpression), unary.Type);
                 case UnaryExpression unary when unary.NodeType == ExpressionType.Not:
-                    return body.Not(BuildExpression(body, sources, unary.Operand, sourceParameter, sourceIndex));
+                    return body.Not(BuildExpression(body, sources, unary.Operand, sourceParameter, sourceIndex, valueParameter, valueExpression));
                 case ConditionalExpression conditional:
                     return body.If(
-                        BuildExpression(body, sources, conditional.Test, sourceParameter, sourceIndex),
-                        BuildExpression(body, sources, conditional.IfTrue, sourceParameter, sourceIndex),
-                        BuildExpression(body, sources, conditional.IfFalse, sourceParameter, sourceIndex));
+                        BuildExpression(body, sources, conditional.Test, sourceParameter, sourceIndex, valueParameter, valueExpression),
+                        BuildExpression(body, sources, conditional.IfTrue, sourceParameter, sourceIndex, valueParameter, valueExpression),
+                        BuildExpression(body, sources, conditional.IfFalse, sourceParameter, sourceIndex, valueParameter, valueExpression));
                 case MethodCallExpression call:
-                    return BuildMethodCallExpression(body, sources, call, sourceParameter, sourceIndex);
+                    return BuildMethodCallExpression(body, sources, call, sourceParameter, sourceIndex, valueParameter, valueExpression);
                 case NewExpression @new:
-                    return BuildNewExpression(body, sources, @new, sourceParameter, sourceIndex);
+                    return BuildNewExpression(body, sources, @new, sourceParameter, sourceIndex, valueParameter, valueExpression);
                 default:
                     throw new NotSupportedException($"Expression node '{expression.NodeType}' is not supported by the current OctoMap expression generator.");
             }
+        }
+
+        private static IBeeValueExpression BuildConditionExpression(
+            IBeeMethodBodyBuilder body,
+            IReadOnlyList<IBeeValueExpression> sources,
+            IBeeValueExpression resolvedValue,
+            LambdaExpression conditionExpression,
+            int sourceIndex)
+        {
+            var valueParameter = conditionExpression.Parameters.Count > 1
+                ? conditionExpression.Parameters[1]
+                : null;
+            return BuildExpression(
+                body,
+                sources,
+                conditionExpression.Body,
+                conditionExpression.Parameters[0],
+                sourceIndex,
+                valueParameter,
+                resolvedValue);
         }
 
         private static IBeeValueExpression BuildNewExpression(
@@ -540,11 +608,13 @@ namespace OctoMap.Generation.Dynabee
             IReadOnlyList<IBeeValueExpression> sources,
             NewExpression expression,
             ParameterExpression sourceParameter,
-            int sourceIndex)
+            int sourceIndex,
+            ParameterExpression valueParameter = null,
+            IBeeValueExpression valueExpression = null)
             => body.New(
                 expression.Type,
                 expression.Arguments
-                    .Select(argument => BuildExpression(body, sources, argument, sourceParameter, sourceIndex))
+                    .Select(argument => BuildExpression(body, sources, argument, sourceParameter, sourceIndex, valueParameter, valueExpression))
                     .ToArray());
 
         private static IBeeValueExpression BuildMemberExpression(
@@ -552,7 +622,9 @@ namespace OctoMap.Generation.Dynabee
             IReadOnlyList<IBeeValueExpression> sources,
             MemberExpression expression,
             ParameterExpression sourceParameter,
-            int sourceIndex)
+            int sourceIndex,
+            ParameterExpression valueParameter = null,
+            IBeeValueExpression valueExpression = null)
         {
             if (expression.Member is PropertyInfo property)
             {
@@ -561,7 +633,7 @@ namespace OctoMap.Generation.Dynabee
                     return body.StaticProperty(property.DeclaringType, property.Name);
                 }
 
-                return body.Property(BuildExpression(body, sources, expression.Expression, sourceParameter, sourceIndex), property.Name);
+                return body.Property(BuildExpression(body, sources, expression.Expression, sourceParameter, sourceIndex, valueParameter, valueExpression), property.Name);
             }
 
             if (expression.Member is FieldInfo field)
@@ -571,7 +643,7 @@ namespace OctoMap.Generation.Dynabee
                     return body.StaticField(field.DeclaringType, field.Name);
                 }
 
-                return body.Field(BuildExpression(body, sources, expression.Expression, sourceParameter, sourceIndex), field.Name);
+                return body.Field(BuildExpression(body, sources, expression.Expression, sourceParameter, sourceIndex, valueParameter, valueExpression), field.Name);
             }
 
             throw new NotSupportedException($"Member '{expression.Member.Name}' is not supported by the current OctoMap expression generator.");
@@ -582,74 +654,76 @@ namespace OctoMap.Generation.Dynabee
             IReadOnlyList<IBeeValueExpression> sources,
             BinaryExpression expression,
             ParameterExpression sourceParameter,
-            int sourceIndex)
+            int sourceIndex,
+            ParameterExpression valueParameter = null,
+            IBeeValueExpression valueExpression = null)
         {
             if (expression.Method != null && expression.Method.IsStatic)
             {
                 return body.StaticCall(
                     expression.Method,
-                    BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex),
-                    BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex));
+                    BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex, valueParameter, valueExpression),
+                    BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex, valueParameter, valueExpression));
             }
 
             switch (expression.NodeType)
             {
                 case ExpressionType.Add:
                     return body.Add(
-                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex),
-                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex));
+                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex, valueParameter, valueExpression),
+                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex, valueParameter, valueExpression));
                 case ExpressionType.Subtract:
                     return body.Subtract(
-                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex),
-                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex));
+                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex, valueParameter, valueExpression),
+                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex, valueParameter, valueExpression));
                 case ExpressionType.Multiply:
                     return body.Multiply(
-                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex),
-                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex));
+                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex, valueParameter, valueExpression),
+                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex, valueParameter, valueExpression));
                 case ExpressionType.Divide:
                     return body.Divide(
-                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex),
-                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex));
+                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex, valueParameter, valueExpression),
+                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex, valueParameter, valueExpression));
                 case ExpressionType.Modulo:
                     return body.Modulo(
-                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex),
-                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex));
+                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex, valueParameter, valueExpression),
+                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex, valueParameter, valueExpression));
                 case ExpressionType.Equal:
                     return body.Equal(
-                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex),
-                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex));
+                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex, valueParameter, valueExpression),
+                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex, valueParameter, valueExpression));
                 case ExpressionType.NotEqual:
                     return body.NotEqual(
-                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex),
-                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex));
+                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex, valueParameter, valueExpression),
+                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex, valueParameter, valueExpression));
                 case ExpressionType.LessThan:
                     return body.LessThan(
-                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex),
-                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex));
+                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex, valueParameter, valueExpression),
+                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex, valueParameter, valueExpression));
                 case ExpressionType.LessThanOrEqual:
                     return body.LessThanOrEqual(
-                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex),
-                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex));
+                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex, valueParameter, valueExpression),
+                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex, valueParameter, valueExpression));
                 case ExpressionType.GreaterThan:
                     return body.GreaterThan(
-                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex),
-                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex));
+                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex, valueParameter, valueExpression),
+                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex, valueParameter, valueExpression));
                 case ExpressionType.GreaterThanOrEqual:
                     return body.GreaterThanOrEqual(
-                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex),
-                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex));
+                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex, valueParameter, valueExpression),
+                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex, valueParameter, valueExpression));
                 case ExpressionType.AndAlso:
                     return body.AndAlso(
-                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex),
-                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex));
+                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex, valueParameter, valueExpression),
+                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex, valueParameter, valueExpression));
                 case ExpressionType.OrElse:
                     return body.OrElse(
-                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex),
-                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex));
+                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex, valueParameter, valueExpression),
+                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex, valueParameter, valueExpression));
                 case ExpressionType.Coalesce:
                     return body.Coalesce(
-                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex),
-                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex));
+                        BuildExpression(body, sources, expression.Left, sourceParameter, sourceIndex, valueParameter, valueExpression),
+                        BuildExpression(body, sources, expression.Right, sourceParameter, sourceIndex, valueParameter, valueExpression));
                 default:
                     throw new NotSupportedException($"Binary expression '{expression.NodeType}' is not supported by the current OctoMap expression generator.");
             }
@@ -660,7 +734,9 @@ namespace OctoMap.Generation.Dynabee
             IReadOnlyList<IBeeValueExpression> sources,
             MethodCallExpression expression,
             ParameterExpression sourceParameter,
-            int sourceIndex)
+            int sourceIndex,
+            ParameterExpression valueParameter = null,
+            IBeeValueExpression valueExpression = null)
         {
             if (ReferenceEquals(expression.Object, sourceParameter)
                 && expression.Method.IsGenericMethod
@@ -677,7 +753,7 @@ namespace OctoMap.Generation.Dynabee
             }
 
             var arguments = expression.Arguments
-                .Select(argument => BuildExpression(body, sources, argument, sourceParameter, sourceIndex))
+                .Select(argument => BuildExpression(body, sources, argument, sourceParameter, sourceIndex, valueParameter, valueExpression))
                 .ToArray();
 
             if (expression.Method.IsStatic)
@@ -690,7 +766,7 @@ namespace OctoMap.Generation.Dynabee
                 throw new NotSupportedException($"Method call '{expression.Method.Name}' does not declare an instance expression.");
             }
 
-            var instance = BuildExpression(body, sources, expression.Object, sourceParameter, sourceIndex);
+            var instance = BuildExpression(body, sources, expression.Object, sourceParameter, sourceIndex, valueParameter, valueExpression);
             return body.Call(instance, expression.Method, arguments);
         }
 

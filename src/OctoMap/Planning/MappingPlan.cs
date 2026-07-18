@@ -96,7 +96,7 @@ namespace OctoMap.Planning
             object constantValue,
             bool hasNullSubstitute,
             object nullSubstitute)
-            : this(destinationProperty, sourceProperty, sourceExpression, null, null, null, false, CollectionShape.None, CollectionShape.None, null, null, true, hasConstantValue, constantValue, hasNullSubstitute, nullSubstitute, 0)
+            : this(destinationProperty, sourceProperty, sourceExpression, null, null, null, null, null, false, CollectionShape.None, CollectionShape.None, null, null, true, hasConstantValue, constantValue, hasNullSubstitute, nullSubstitute, 0)
         {
         }
 
@@ -109,6 +109,8 @@ namespace OctoMap.Planning
         /// <param name="resolverType">The resolver type.</param>
         /// <param name="converterType">The converter type.</param>
         /// <param name="converterSourceExpression">The converter source expression.</param>
+        /// <param name="preConditionExpression">The precondition expression.</param>
+        /// <param name="conditionExpression">The assignment condition expression.</param>
         /// <param name="useNestedMap">A value indicating whether the assignment uses a nested map.</param>
         /// <param name="sourceCollectionShape">The source collection shape.</param>
         /// <param name="destinationCollectionShape">The destination collection shape.</param>
@@ -129,6 +131,8 @@ namespace OctoMap.Planning
             Type resolverType,
             Type converterType,
             LambdaExpression converterSourceExpression,
+            LambdaExpression preConditionExpression,
+            LambdaExpression conditionExpression,
             bool useNestedMap,
             CollectionShape sourceCollectionShape,
             CollectionShape destinationCollectionShape,
@@ -150,6 +154,8 @@ namespace OctoMap.Planning
             ResolverType = resolverType;
             ConverterType = converterType;
             ConverterSourceExpression = converterSourceExpression;
+            PreConditionExpression = preConditionExpression;
+            ConditionExpression = conditionExpression;
             UseNestedMap = useNestedMap;
             SourceCollectionShape = sourceCollectionShape;
             DestinationCollectionShape = destinationCollectionShape;
@@ -188,6 +194,16 @@ namespace OctoMap.Planning
         /// Gets the converter source expression.
         /// </summary>
         public LambdaExpression ConverterSourceExpression { get; }
+
+        /// <summary>
+        /// Gets the precondition expression.
+        /// </summary>
+        public LambdaExpression PreConditionExpression { get; }
+
+        /// <summary>
+        /// Gets the assignment condition expression.
+        /// </summary>
+        public LambdaExpression ConditionExpression { get; }
 
         /// <summary>
         /// Gets whether the assignment uses a nested map.
