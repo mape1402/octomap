@@ -93,6 +93,14 @@ namespace OctoMap.Samples.Basic
 
             Console.WriteLine($"Resolver, value converter, nested map, collection map, flattening: {orderDto.Id} - {orderDto.Status} - {orderDto.Description} - {orderDto.StatusLabel} - {orderDto.TotalText} - {orderDto.Customer.FullName} - {orderDto.CustomerFirstName} - {orderDto.Items.Count} items");
 
+            var unflattenedOrder = _mapper.Map<OrderDto, Order>(new OrderDto
+            {
+                Id = 800,
+                CustomerFirstName = "Dorothy"
+            });
+
+            Console.WriteLine($"ForPath map: {unflattenedOrder.Id} - {unflattenedOrder.Customer.FirstName}");
+
             var orderLineDto = _mapper.Map<OrderLine, OrderLineDto>(new OrderLine
             {
                 Sku = "OCTO-HOODIE",

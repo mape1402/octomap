@@ -121,6 +121,7 @@ namespace OctoMap.Planning
         /// <param name="nullSubstitute">The null substitute value.</param>
         /// <param name="sourceIndex">The source index.</param>
         /// <param name="sourcePath">The source property path.</param>
+        /// <param name="destinationPath">The destination property path.</param>
         public MemberAssignmentPlan(
             PropertyInfo destinationProperty,
             PropertyInfo sourceProperty,
@@ -139,9 +140,11 @@ namespace OctoMap.Planning
             bool hasNullSubstitute,
             object nullSubstitute,
             int sourceIndex,
-            IReadOnlyList<PropertyInfo> sourcePath = null)
+            IReadOnlyList<PropertyInfo> sourcePath = null,
+            IReadOnlyList<PropertyInfo> destinationPath = null)
         {
             DestinationProperty = destinationProperty ?? throw new ArgumentNullException(nameof(destinationProperty));
+            DestinationPath = destinationPath?.ToArray() ?? new[] { destinationProperty };
             SourceProperty = sourceProperty;
             SourceExpression = sourceExpression;
             ResolverType = resolverType;
@@ -260,5 +263,15 @@ namespace OctoMap.Planning
         /// Gets the destination property.
         /// </summary>
         public PropertyInfo DestinationProperty { get; }
+
+        /// <summary>
+        /// Gets the destination property path.
+        /// </summary>
+        public IReadOnlyList<PropertyInfo> DestinationPath { get; }
+
+        /// <summary>
+        /// Gets whether the assignment targets a nested destination property path.
+        /// </summary>
+        public bool UsesDestinationPath => DestinationPath.Count > 1;
     }
 }

@@ -137,6 +137,7 @@ Core responsibilities:
 - Register type maps.
 - Register multi-source type maps.
 - Register member maps.
+- Register nested destination path maps.
 - Register conventions.
 - Register global transforms.
 - Register converters and resolvers.
@@ -246,6 +247,17 @@ Conventions should be replaceable:
 - `ICollectionMappingConvention`
 
 Multi-source maps intentionally skip convention matching. Every destination member must be explicitly configured from a source contribution or from the multi-source context. This keeps ambiguous cases obvious instead of trying to guess between matching property names across several sources.
+
+## Destination Path Mapping
+
+`ForPath(...)` is the explicit unflattening mechanism. It records a destination property chain in the configuration model and carries that chain into the mapping plan.
+
+```csharp
+builder.CreateMap<OrderDto, Order>()
+    .ForPath(x => x.Customer.Name, x => x.MapFrom(s => s.CustomerName));
+```
+
+Runtime generation creates null intermediate destination objects when their types are concrete, writable, readable, and expose public parameterless constructors. Projection support for destination paths is a separate feature because query providers need nested `MemberInit` expressions instead of imperative null checks and assignments.
 
 ## Implicit Runtime Mapping
 

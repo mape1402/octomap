@@ -70,6 +70,32 @@ namespace OctoMap.Configuration
             return this;
         }
 
+        /// <inheritdoc/>
+        public IMapExpression<TSource, TDestination> ForPath<TMember>(
+            Expression<Func<TDestination, TMember>> destinationPath,
+            Action<IMemberMapExpression<TSource, TDestination, TMember>> configure)
+        {
+            if (destinationPath == null)
+            {
+                throw new ArgumentNullException(nameof(destinationPath));
+            }
+
+            if (configure == null)
+            {
+                throw new ArgumentNullException(nameof(configure));
+            }
+
+            var path = GetPropertyPath(destinationPath);
+            if (path.Count < 2)
+            {
+                throw new InvalidOperationException("The destination path expression must target a nested property path.");
+            }
+
+            var memberMap = _typeMap.GetOrAddMemberPathMap(path);
+            configure(new MemberMapExpression<TSource, TDestination, TMember>(memberMap));
+            return this;
+        }
+
         private static PropertyInfo GetProperty<TMember>(Expression<Func<TDestination, TMember>> expression)
         {
             if (expression.Body is MemberExpression member && member.Member is PropertyInfo property)
@@ -78,6 +104,29 @@ namespace OctoMap.Configuration
             }
 
             throw new InvalidOperationException("The destination member expression must target a property.");
+        }
+
+        private static IReadOnlyList<PropertyInfo> GetPropertyPath<TMember>(Expression<Func<TDestination, TMember>> expression)
+        {
+            var path = new Stack<PropertyInfo>();
+            Expression current = expression.Body;
+            while (current is MemberExpression member)
+            {
+                if (member.Member is not PropertyInfo property)
+                {
+                    throw new InvalidOperationException("The destination path expression must target properties only.");
+                }
+
+                path.Push(property);
+                current = member.Expression;
+            }
+
+            if (current is not ParameterExpression parameter || !ReferenceEquals(parameter, expression.Parameters[0]))
+            {
+                throw new InvalidOperationException("The destination path expression must start from the destination parameter.");
+            }
+
+            return path.ToArray();
         }
 
         private void CopyReversibleMemberMaps(TypeMap reverseMap)

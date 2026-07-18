@@ -32,5 +32,16 @@ namespace OctoMap
         IMapExpression<TSource, TDestination> ForMember<TMember>(
             Expression<Func<TDestination, TMember>> destinationMember,
             Action<IMemberMapExpression<TSource, TDestination, TMember>> configure);
+
+        /// <summary>
+        /// Configures a nested destination member path.
+        /// </summary>
+        /// <typeparam name="TMember">The destination member type.</typeparam>
+        /// <param name="destinationPath">The destination member path expression.</param>
+        /// <param name="configure">The member configuration callback.</param>
+        /// <returns>The current map expression.</returns>
+        IMapExpression<TSource, TDestination> ForPath<TMember>(
+            Expression<Func<TDestination, TMember>> destinationPath,
+            Action<IMemberMapExpression<TSource, TDestination, TMember>> configure);
     }
 }

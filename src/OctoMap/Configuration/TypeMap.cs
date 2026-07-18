@@ -56,5 +56,32 @@ namespace OctoMap.Configuration
 
             return memberMap;
         }
+
+        /// <summary>
+        /// Gets or adds a member map for the specified destination property path.
+        /// </summary>
+        /// <param name="destinationPath">The destination property path.</param>
+        /// <returns>The member map.</returns>
+        public MemberMap GetOrAddMemberPathMap(IReadOnlyList<System.Reflection.PropertyInfo> destinationPath)
+        {
+            if (destinationPath == null)
+            {
+                throw new ArgumentNullException(nameof(destinationPath));
+            }
+
+            if (destinationPath.Count == 0)
+            {
+                throw new ArgumentException("A destination path must contain at least one property.", nameof(destinationPath));
+            }
+
+            var key = string.Join(".", destinationPath.Select(x => x.Name));
+            if (!_memberMaps.TryGetValue(key, out var memberMap))
+            {
+                memberMap = new MemberMap(destinationPath[^1], destinationPath);
+                _memberMaps[key] = memberMap;
+            }
+
+            return memberMap;
+        }
     }
 }

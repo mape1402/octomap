@@ -31,6 +31,7 @@ These capabilities are already implemented or have an initial working version:
 - convention flattening for single-source maps
 - basic `ReverseMap()`
 - first-pass `ProjectTo(...)` expression projection
+- first-pass `ForPath(...)` runtime destination path mapping
 - README, API docs, architecture docs, sample project, and unit tests
 
 ## Core Principles
@@ -110,19 +111,20 @@ builder.CreateMap<OrderDto, Order>()
     .ForPath(x => x.Customer.Name, x => x.MapFrom(s => s.CustomerName));
 ```
 
-Required scenarios:
+Implemented first pass:
 
 - explicit nested destination member assignment
 - unflattening configured by the user
-- reverse map customization
 - null-safe creation of intermediate destination objects where possible
 - validation when a path is not writable
 
-Non-goals for the first pass:
+Remaining work:
 
+- reverse map customization
 - automatic unflattening
 - collection item paths
-- multi-source `ForPath`
+- context-level multi-source `ForPath`
+- projection support for nested destination paths
 
 ### 3. Strict Validation and Diagnostics
 

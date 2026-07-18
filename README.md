@@ -384,6 +384,19 @@ builder.CreateMap<Order, OrderDto>();
 
 This maps `Order.Customer.Name` to `OrderDto.CustomerName`. If an intermediate source object is null, OctoMap assigns the destination member default value. Flattening is currently single-source only; multi-source maps must configure those members explicitly.
 
+## Destination Paths
+
+Use `ForPath(...)` when a flat source model needs to assign a nested destination member explicitly.
+
+```csharp
+builder.CreateMap<OrderDto, Order>()
+    .ForPath(x => x.Customer.Name, x => x.MapFrom(s => s.CustomerName));
+```
+
+OctoMap creates null intermediate destination objects when their types expose public parameterless constructors. If an intermediate path member is abstract, an interface, a value type, readonly, or missing a public parameterless constructor, validation fails with a clear configuration error.
+
+`ForPath(...)` is currently runtime-only. Projection support for nested destination paths is planned separately because query providers need nested `MemberInit` expressions that must stay provider-friendly.
+
 ## Collection Mapping
 
 OctoMap supports collection member mapping by convention when the source and destination property names match and the element types are assignable or mappable.
@@ -595,6 +608,7 @@ Reverse map: OCTO-001 - 49.95
 Projection map: OCTO-PROJ - 19.95
 EF SQLite projection map: OCTO-SQLITE - 29.95
 Resolver, value converter, nested map, collection map, flattening: 700 - NEW - No description - Order #0700 is Created - 149.99 USD - Katherine Johnson - Katherine - 2 items
+ForPath map: 800 - Dorothy
 Generated expressions: OCTO-HOODIE - 109.97 - remainder 1 - can ship True
 Interface map: WH-42
 Multi-source map: 701 - Ada - Priority order - Ada

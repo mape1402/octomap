@@ -108,12 +108,40 @@ namespace OctoMap.Generation.Dynabee
 
             foreach (var assignment in plan.Assignments)
             {
-                var target = body.Property(destination, assignment.DestinationProperty.Name);
+                var target = BuildDestinationTarget(body, destination, assignment);
                 var value = BuildAssignmentValue(body, sources, destination, context, assignment);
                 body.Assign(target, value);
             }
 
             body.Return(destination);
+        }
+
+        private static IBeeAssignableExpression BuildDestinationTarget(
+            IBeeMethodBodyBuilder body,
+            IBeeValueExpression destination,
+            MemberAssignmentPlan assignment)
+        {
+            if (!assignment.UsesDestinationPath)
+            {
+                return body.Property(destination, assignment.DestinationProperty.Name);
+            }
+
+            var current = destination;
+            for (var index = 0; index < assignment.DestinationPath.Count - 1; index++)
+            {
+                var property = assignment.DestinationPath[index];
+                var next = body.Property(current, property.Name);
+                if (CanBeNull(property.PropertyType))
+                {
+                    body.If(
+                        body.IsNull(next),
+                        whenTrue => whenTrue.Assign(body.Property(current, property.Name), whenTrue.New(property.PropertyType)));
+                }
+
+                current = body.Property(current, property.Name);
+            }
+
+            return body.Property(current, assignment.DestinationProperty.Name);
         }
 
         private static IBeeValueExpression CreateDestination(

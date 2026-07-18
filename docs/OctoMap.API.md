@@ -76,6 +76,23 @@ void UseValue(TMember value);
 void NullSubstitute(TMember value);
 ```
 
+### Destination Paths
+
+```csharp
+IMapExpression<TSource, TDestination> ForPath<TMember>(
+    Expression<Func<TDestination, TMember>> destinationPath,
+    Action<IMemberMapExpression<TSource, TDestination, TMember>> configure);
+```
+
+`ForPath(...)` configures a nested destination member path.
+
+```csharp
+builder.CreateMap<OrderDto, Order>()
+    .ForPath(x => x.Customer.Name, x => x.MapFrom(s => s.CustomerName));
+```
+
+Intermediate destination members are created when they are null and their types expose public parameterless constructors. `ForPath(...)` supports the same member rules as `ForMember(...)` for runtime mapping. Nested destination path projection is not supported yet.
+
 ### Destination Construction
 
 Destinations with public parameterless constructors are created by convention. If a destination does not expose a public parameterless constructor, OctoMap can match public constructor parameters to readable source properties by name.

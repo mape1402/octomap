@@ -65,6 +65,11 @@ namespace OctoMap.Projection
             var bindings = new List<MemberBinding>();
             foreach (var assignment in plan.Assignments)
             {
+                if (assignment.UsesDestinationPath)
+                {
+                    throw new NotSupportedException($"Member path '{string.Join(".", assignment.DestinationPath.Select(x => x.Name))}' cannot be projected because nested destination path projection is not supported yet.");
+                }
+
                 bindings.Add(Expression.Bind(assignment.DestinationProperty, BuildAssignmentExpression(plan, assignment, source)));
             }
 

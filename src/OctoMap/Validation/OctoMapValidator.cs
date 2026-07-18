@@ -42,6 +42,7 @@ namespace OctoMap.Validation
 
             ValidateDestinationCreation(typeMap, issues);
             ValidateConstructionExpression(typeMap, issues);
+            ValidateDestinationPathConflicts(typeMap, issues);
 
             foreach (var memberMap in typeMap.MemberMaps.Values)
             {
@@ -104,9 +105,11 @@ namespace OctoMap.Validation
                 return;
             }
 
+            ValidateDestinationPath(map, memberMap, issues);
+
             if (!CanWrite(memberMap.DestinationProperty))
             {
-                issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"Destination member '{memberMap.DestinationProperty.Name}' must have a public setter."));
+                issues.Add(CreateIssue(map, GetMemberName(memberMap), $"Destination member '{GetMemberName(memberMap)}' must have a public setter."));
             }
 
             if (memberMap.SourceExpression != null)
@@ -130,17 +133,17 @@ namespace OctoMap.Validation
 
             if (memberMap.HasConstantValue)
             {
-                ValidateValue(map, memberMap.DestinationProperty.Name, memberMap.ConstantValue, memberMap.DestinationProperty.PropertyType, "constant", issues);
+                ValidateValue(map, GetMemberName(memberMap), memberMap.ConstantValue, memberMap.DestinationProperty.PropertyType, "constant", issues);
             }
 
             if (memberMap.HasNullSubstitute)
             {
                 if (memberMap.DestinationProperty.PropertyType.IsValueType)
                 {
-                    issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"NullSubstitute is only supported for reference-type destination members."));
+                    issues.Add(CreateIssue(map, GetMemberName(memberMap), $"NullSubstitute is only supported for reference-type destination members."));
                 }
 
-                ValidateValue(map, memberMap.DestinationProperty.Name, memberMap.NullSubstitute, memberMap.DestinationProperty.PropertyType, "null substitute", issues);
+                ValidateValue(map, GetMemberName(memberMap), memberMap.NullSubstitute, memberMap.DestinationProperty.PropertyType, "null substitute", issues);
             }
         }
 
@@ -203,7 +206,67 @@ namespace OctoMap.Validation
         }
 
         private static string GetMemberName(MemberMap memberMap)
-            => memberMap?.DestinationProperty.Name;
+            => memberMap == null
+                ? null
+                : string.Join(".", memberMap.DestinationPath.Select(x => x.Name));
+
+        private static void ValidateDestinationPath(ITypeMap map, MemberMap memberMap, List<OctoMapValidationIssue> issues)
+        {
+            for (var index = 0; index < memberMap.DestinationPath.Count; index++)
+            {
+                var property = memberMap.DestinationPath[index];
+                if (!CanWrite(property))
+                {
+                    issues.Add(CreateIssue(map, GetMemberName(memberMap), $"Destination path member '{property.Name}' must have a public setter."));
+                }
+
+                if (index == memberMap.DestinationPath.Count - 1)
+                {
+                    continue;
+                }
+
+                if (!property.CanRead || property.GetMethod == null || !property.GetMethod.IsPublic)
+                {
+                    issues.Add(CreateIssue(map, GetMemberName(memberMap), $"Destination path member '{property.Name}' must have a public getter."));
+                }
+
+                if (property.PropertyType.IsValueType)
+                {
+                    issues.Add(CreateIssue(map, GetMemberName(memberMap), $"Destination path member '{property.Name}' cannot be a value type."));
+                    continue;
+                }
+
+                if (property.PropertyType.IsAbstract || property.PropertyType.IsInterface)
+                {
+                    issues.Add(CreateIssue(map, GetMemberName(memberMap), $"Destination path member '{property.Name}' cannot be abstract or an interface."));
+                    continue;
+                }
+
+                if (property.PropertyType.GetConstructor(Type.EmptyTypes) == null)
+                {
+                    issues.Add(CreateIssue(map, GetMemberName(memberMap), $"Destination path member '{property.Name}' must have a public parameterless constructor."));
+                }
+            }
+        }
+
+        private static void ValidateDestinationPathConflicts(TypeMap map, List<OctoMapValidationIssue> issues)
+        {
+            var rootMemberMaps = map.MemberMaps.Values
+                .Where(x => !x.UsesDestinationPath && !x.IsIgnored)
+                .ToDictionary(x => x.DestinationProperty.Name, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var pathMemberMap in map.MemberMaps.Values.Where(x => x.UsesDestinationPath && !x.IsIgnored))
+            {
+                var rootName = pathMemberMap.DestinationPath[0].Name;
+                if (rootMemberMaps.ContainsKey(rootName))
+                {
+                    issues.Add(CreateIssue(
+                        map,
+                        GetMemberName(pathMemberMap),
+                        $"Destination path '{GetMemberName(pathMemberMap)}' conflicts with configured destination member '{rootName}'."));
+                }
+            }
+        }
 
         private static void ValidateMultiSourceMap(MultiSourceTypeMap map, List<OctoMapValidationIssue> issues)
         {
@@ -226,7 +289,7 @@ namespace OctoMap.Validation
 
                     if (memberMap.SourceExpression == null && memberMap.ResolverType == null && memberMap.ConverterType == null && !memberMap.HasConstantValue)
                     {
-                        issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"Multi-source member '{memberMap.DestinationProperty.Name}' must be mapped explicitly with MapFrom, ConvertUsing, ResolveUsing, or UseValue."));
+                        issues.Add(CreateIssue(map, GetMemberName(memberMap), $"Multi-source member '{GetMemberName(memberMap)}' must be mapped explicitly with MapFrom, ConvertUsing, ResolveUsing, or UseValue."));
                         continue;
                     }
 
@@ -423,7 +486,7 @@ namespace OctoMap.Validation
                         continue;
                     }
 
-                    AddConfiguredMember(map, memberMap.DestinationProperty.Name, $"source '{sourceMap.SourceType.FullName}'", configuredMembers, issues);
+                    AddConfiguredMember(map, GetMemberName(memberMap), $"source '{sourceMap.SourceType.FullName}'", configuredMembers, issues);
                 }
             }
 
@@ -491,7 +554,7 @@ namespace OctoMap.Validation
 
             if (!resolverContract.IsAssignableFrom(memberMap.ResolverType))
             {
-                issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"Resolver type '{memberMap.ResolverType.FullName}' must implement '{resolverContract.FullName}'."));
+                issues.Add(CreateIssue(map, GetMemberName(memberMap), $"Resolver type '{memberMap.ResolverType.FullName}' must implement '{resolverContract.FullName}'."));
             }
         }
 
@@ -499,7 +562,7 @@ namespace OctoMap.Validation
         {
             if (memberMap.ConverterSourceExpression == null)
             {
-                issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"Converter source expression is required for member '{memberMap.DestinationProperty.Name}'."));
+                issues.Add(CreateIssue(map, GetMemberName(memberMap), $"Converter source expression is required for member '{GetMemberName(memberMap)}'."));
                 return;
             }
 
@@ -511,7 +574,7 @@ namespace OctoMap.Validation
 
             if (!converterContract.IsAssignableFrom(memberMap.ConverterType))
             {
-                issues.Add(CreateIssue(map, memberMap.DestinationProperty.Name, $"Converter type '{memberMap.ConverterType.FullName}' must implement '{converterContract.FullName}'."));
+                issues.Add(CreateIssue(map, GetMemberName(memberMap), $"Converter type '{memberMap.ConverterType.FullName}' must implement '{converterContract.FullName}'."));
             }
         }
 

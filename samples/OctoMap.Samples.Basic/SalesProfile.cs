@@ -35,6 +35,9 @@ namespace OctoMap.Samples.Basic
                 .ForMember(x => x.StatusLabel, x => x.ResolveUsing<OrderStatusLabelResolver>())
                 .ForMember(x => x.TotalText, x => x.ConvertUsing<OrderTotalTextConverter>(s => s.Total));
 
+            builder.CreateMap<OrderDto, Order>()
+                .ForPath(x => x.Customer.FirstName, x => x.MapFrom(s => s.CustomerFirstName));
+
             builder.CreateMultiMap<OrderSummaryDto>()
                 .From<Order>(map => map
                     .ForMember(x => x.OrderId, x => x.MapFrom(s => s.Id))

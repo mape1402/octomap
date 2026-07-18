@@ -13,14 +13,35 @@ namespace OctoMap.Configuration
         /// </summary>
         /// <param name="destinationProperty">The destination property.</param>
         public MemberMap(PropertyInfo destinationProperty)
+            : this(destinationProperty, new[] { destinationProperty })
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="MemberMap"/> class.
+        /// </summary>
+        /// <param name="destinationProperty">The destination property.</param>
+        /// <param name="destinationPath">The destination property path.</param>
+        public MemberMap(PropertyInfo destinationProperty, IReadOnlyList<PropertyInfo> destinationPath)
         {
             DestinationProperty = destinationProperty ?? throw new ArgumentNullException(nameof(destinationProperty));
+            DestinationPath = destinationPath?.ToArray() ?? throw new ArgumentNullException(nameof(destinationPath));
         }
 
         /// <summary>
         /// Gets the destination property.
         /// </summary>
         public PropertyInfo DestinationProperty { get; }
+
+        /// <summary>
+        /// Gets the destination property path.
+        /// </summary>
+        public IReadOnlyList<PropertyInfo> DestinationPath { get; }
+
+        /// <summary>
+        /// Gets whether this member targets a nested destination path.
+        /// </summary>
+        public bool UsesDestinationPath => DestinationPath.Count > 1;
 
         /// <summary>
         /// Gets or sets whether this member should be ignored.

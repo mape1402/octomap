@@ -40,6 +40,15 @@ namespace OctoMap.Planning
             var explicitMemberMaps = typeMap is TypeMap configuredTypeMap
                 ? configuredTypeMap.MemberMaps
                 : new Dictionary<string, MemberMap>(StringComparer.OrdinalIgnoreCase);
+            var explicitRootMemberMaps = explicitMemberMaps.Values
+                .Where(x => !x.UsesDestinationPath)
+                .ToDictionary(x => x.DestinationProperty.Name, StringComparer.OrdinalIgnoreCase);
+            var explicitPathMemberMaps = explicitMemberMaps.Values
+                .Where(x => x.UsesDestinationPath)
+                .ToArray();
+            var pathRootNames = new HashSet<string>(
+                explicitPathMemberMaps.Select(x => x.DestinationPath[0].Name),
+                StringComparer.OrdinalIgnoreCase);
 
             var configuredConstructionExpression = typeMap is TypeMap configuredConstructionTypeMap
                 ? configuredConstructionTypeMap.ConstructionExpression
@@ -59,7 +68,12 @@ namespace OctoMap.Planning
                     continue;
                 }
 
-                if (explicitMemberMaps.TryGetValue(destinationProperty.Name, out var memberMap))
+                if (pathRootNames.Contains(destinationProperty.Name))
+                {
+                    continue;
+                }
+
+                if (explicitRootMemberMaps.TryGetValue(destinationProperty.Name, out var memberMap))
                 {
                     if (memberMap.IsIgnored)
                     {
@@ -101,7 +115,7 @@ namespace OctoMap.Planning
                     continue;
                 }
 
-                explicitMemberMaps.TryGetValue(destinationProperty.Name, out var configuredMemberMap);
+                explicitRootMemberMaps.TryGetValue(destinationProperty.Name, out var configuredMemberMap);
                 if (TryCreateCollectionAssignment(destinationProperty, sourceProperty, configuredMemberMap, out var collectionAssignment))
                 {
                     assignments.Add(collectionAssignment);
@@ -138,6 +152,16 @@ namespace OctoMap.Planning
                 assignments.Add(CreateAssignment(destinationProperty, sourceProperty, null, memberMap));
             }
 
+            foreach (var memberMap in explicitPathMemberMaps)
+            {
+                if (memberMap.IsIgnored)
+                {
+                    continue;
+                }
+
+                assignments.Add(CreateAssignment(memberMap.DestinationProperty, null, memberMap.SourceExpression, memberMap));
+            }
+
             return new MappingPlan(typeMap.SourceType, typeMap.DestinationType, assignments, construction);
         }
 
@@ -166,7 +190,9 @@ namespace OctoMap.Planning
                 memberMap?.ConstantValue,
                 memberMap?.HasNullSubstitute == true,
                 memberMap?.NullSubstitute,
-                0);
+                0,
+                null,
+                memberMap?.DestinationPath);
 
         private static MappingPlan BuildMultiSource(MultiSourceTypeMap typeMap)
         {
@@ -277,7 +303,9 @@ namespace OctoMap.Planning
                 memberMap?.ConstantValue,
                 memberMap?.HasNullSubstitute == true,
                 memberMap?.NullSubstitute,
-                sourceIndex);
+                sourceIndex,
+                null,
+                memberMap?.DestinationPath);
 
         private static void EnsureDestinationCanBeCreated(Type destinationType)
         {
