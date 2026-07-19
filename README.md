@@ -623,6 +623,7 @@ The first projection pass supports:
 
 - direct property mapping
 - configured `MapFrom(...)` expressions
+- external projection parameters for captured `MapFrom(...)` values
 - constants
 - null substitutes
 - convention flattening
@@ -639,6 +640,28 @@ Runtime-only features are rejected with clear errors:
 - nested collection element runtime mapping
 - lifecycle actions
 - multi-source maps
+
+Projection parameters can replace captured values used by `MapFrom(...)`.
+
+```csharp
+public sealed class ProductProfile : OctoMapProfile
+{
+    public override void Configure(IOctoMapConfigurationBuilder builder)
+    {
+        var labelPrefix = "default";
+
+        builder.CreateMap<Product, ProductDto>()
+            .ForMember(x => x.Label, x => x.MapFrom(s => labelPrefix + ": " + s.Sku));
+    }
+}
+
+var labelPrefix = "SKU";
+
+var query = db.Products
+    .ProjectTo<ProductDto>(mapper.ProjectionBuilder, new { labelPrefix });
+```
+
+The parameter object can be an anonymous object or an `IDictionary<string, object>`. Parameter names match the captured variable name case-insensitively.
 
 ## Constructor Mapping
 
@@ -1017,6 +1040,7 @@ Reverse map: OCTO-001 - 49.95
 Global type converter map: OCTO-CODE
 Naming convention map: Legacy Ada - 88.50
 Projection map: OCTO-PROJ - 19.95
+Parameterized projection map: Projected SKU: OCTO-PARAM
 EF SQLite projection map: OCTO-SQLITE - 29.95
 Resolver, value converter, nested map, collection map, flattening: 700 - NEW - No description - Order #0700 is Created - 149.99 USD - Katherine Johnson - Katherine - 2 items - 2 converted tags
 ForPath map: 800 - Dorothy

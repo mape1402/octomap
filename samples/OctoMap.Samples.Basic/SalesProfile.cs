@@ -30,6 +30,10 @@ namespace OctoMap.Samples.Basic
             builder.CreateMap<Product, ProductDto>()
                 .ReverseMap();
 
+            var labelPrefix = "Product";
+            builder.CreateMap<Product, ProductLabelDto>()
+                .ForMember(x => x.Label, x => x.MapFrom(s => labelPrefix + ": " + s.Sku));
+
             builder.CreateMap<Product, ProductCodeDto>();
 
             builder.CreateMap<LegacyOrder, LegacyOrderDto>();

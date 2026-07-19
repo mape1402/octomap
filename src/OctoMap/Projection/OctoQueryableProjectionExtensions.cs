@@ -17,6 +17,20 @@ namespace OctoMap
         public static IQueryable<TDestination> ProjectTo<TDestination>(
             this IQueryable source,
             IOctoProjectionBuilder projectionBuilder)
+            => ProjectTo<TDestination>(source, projectionBuilder, null);
+
+        /// <summary>
+        /// Projects a queryable source sequence to the configured destination type using external parameters.
+        /// </summary>
+        /// <typeparam name="TDestination">The destination type.</typeparam>
+        /// <param name="source">The source query.</param>
+        /// <param name="projectionBuilder">The projection builder.</param>
+        /// <param name="parameters">The projection parameters.</param>
+        /// <returns>The projected query.</returns>
+        public static IQueryable<TDestination> ProjectTo<TDestination>(
+            this IQueryable source,
+            IOctoProjectionBuilder projectionBuilder,
+            object parameters)
         {
             if (source == null)
             {
@@ -28,7 +42,7 @@ namespace OctoMap
                 throw new ArgumentNullException(nameof(projectionBuilder));
             }
 
-            var projection = projectionBuilder.Build(source.ElementType, typeof(TDestination));
+            var projection = projectionBuilder.Build(source.ElementType, typeof(TDestination), parameters);
             var select = Expression.Call(
                 typeof(Queryable),
                 nameof(Queryable.Select),

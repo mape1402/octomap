@@ -40,7 +40,15 @@ namespace OctoMap.Projection
             => (Expression<Func<TSource, TDestination>>)Build(typeof(TSource), typeof(TDestination));
 
         /// <inheritdoc/>
+        public Expression<Func<TSource, TDestination>> Build<TSource, TDestination>(object parameters)
+            => (Expression<Func<TSource, TDestination>>)Build(typeof(TSource), typeof(TDestination), parameters);
+
+        /// <inheritdoc/>
         public LambdaExpression Build(Type sourceType, Type destinationType)
+            => Build(sourceType, destinationType, null);
+
+        /// <inheritdoc/>
+        public LambdaExpression Build(Type sourceType, Type destinationType, object parameters)
         {
             if (sourceType == null)
             {
@@ -55,6 +63,9 @@ namespace OctoMap.Projection
             var typeMap = _configuration.FindMap(sourceType, destinationType)
                 ?? CreateImplicitMap(sourceType, destinationType);
 
+            var projectionParameters = ProjectionParameterBag.From(parameters);
+            typeMap = CreateProjectionMap(typeMap, projectionParameters);
+
             var report = _validator.Validate(new[] { typeMap });
             if (!report.IsValid)
             {
@@ -62,10 +73,10 @@ namespace OctoMap.Projection
             }
 
             var plan = _planBuilder.Build(typeMap);
-            return BuildProjectionExpression(plan);
+            return BuildProjectionExpression(plan, projectionParameters);
         }
 
-        private static LambdaExpression BuildProjectionExpression(MappingPlan plan)
+        private static LambdaExpression BuildProjectionExpression(MappingPlan plan, ProjectionParameterBag parameters)
         {
             if (plan.SourceTypes.Count != 1)
             {
@@ -92,7 +103,7 @@ namespace OctoMap.Projection
                     throw new NotSupportedException($"Member '{assignment.DestinationProperty.Name}' cannot be projected because conditional mapping is not supported in projections yet.");
                 }
 
-                bindings.Add(Expression.Bind(assignment.DestinationProperty, BuildAssignmentExpression(plan, assignment, source)));
+                bindings.Add(Expression.Bind(assignment.DestinationProperty, BuildAssignmentExpression(plan, assignment, source, parameters)));
             }
 
             Expression body = bindings.Count == 0
@@ -146,7 +157,7 @@ namespace OctoMap.Projection
             return Expression.New(defaultConstructor);
         }
 
-        private static Expression BuildAssignmentExpression(MappingPlan plan, MemberAssignmentPlan assignment, ParameterExpression source)
+        private static Expression BuildAssignmentExpression(MappingPlan plan, MemberAssignmentPlan assignment, ParameterExpression source, ProjectionParameterBag parameters)
         {
             if (assignment.ResolverType != null)
             {
@@ -179,6 +190,7 @@ namespace OctoMap.Projection
                     assignment.SourceExpression.Body,
                     assignment.SourceExpression.Parameters[0],
                     source);
+                value = ReplaceProjectionParameters(value, parameters);
             }
             else if (assignment.UseFlattenedMap)
             {
@@ -335,8 +347,61 @@ namespace OctoMap.Projection
             return new TypeMap(sourceType, destinationType, true, _options, new Configuration.MapDeclaration("Runtime implicit projection map"));
         }
 
+        private static ITypeMap CreateProjectionMap(ITypeMap typeMap, ProjectionParameterBag parameters)
+        {
+            if (parameters.IsEmpty || typeMap is not TypeMap configuredMap)
+            {
+                return typeMap;
+            }
+
+            var projectionMap = new TypeMap(
+                configuredMap.SourceType,
+                configuredMap.DestinationType,
+                configuredMap.IsImplicit,
+                configuredMap.Options,
+                configuredMap.Declaration);
+
+            if (configuredMap.ConstructionExpression != null)
+            {
+                projectionMap.ConstructionExpression = ReplaceProjectionParameters(configuredMap.ConstructionExpression, parameters);
+            }
+
+            foreach (var memberMap in configuredMap.MemberMaps.Values)
+            {
+                var projectionMemberMap = memberMap.UsesDestinationPath
+                    ? projectionMap.GetOrAddMemberPathMap(memberMap.DestinationPath)
+                    : projectionMap.GetOrAddMemberMap(memberMap.DestinationProperty);
+
+                projectionMemberMap.CopyFrom(memberMap);
+                projectionMemberMap.SourceExpression = ReplaceProjectionParameters(memberMap.SourceExpression, parameters);
+                projectionMemberMap.PreConditionExpression = ReplaceProjectionParameters(memberMap.PreConditionExpression, parameters);
+                projectionMemberMap.ConditionExpression = ReplaceProjectionParameters(memberMap.ConditionExpression, parameters);
+                projectionMemberMap.ConverterSourceExpression = ReplaceProjectionParameters(memberMap.ConverterSourceExpression, parameters);
+            }
+
+            foreach (var lifecycleAction in configuredMap.LifecycleActions)
+            {
+                projectionMap.AddLifecycleAction(lifecycleAction);
+            }
+
+            return projectionMap;
+        }
+
         private static Expression ReplaceParameter(Expression expression, ParameterExpression from, Expression to)
             => new ParameterReplacementVisitor(from, to).Visit(expression);
+
+        private static Expression ReplaceProjectionParameters(Expression expression, ProjectionParameterBag parameters)
+            => parameters.IsEmpty ? expression : new ProjectionParameterReplacementVisitor(parameters).Visit(expression);
+
+        private static LambdaExpression ReplaceProjectionParameters(LambdaExpression expression, ProjectionParameterBag parameters)
+        {
+            if (expression == null || parameters.IsEmpty)
+            {
+                return expression;
+            }
+
+            return Expression.Lambda(ReplaceProjectionParameters(expression.Body, parameters), expression.Parameters);
+        }
 
         private static Expression ApplyTypeConversion(Expression value, TypeConversionMap typeConversion, string memberName)
         {
@@ -401,6 +466,69 @@ namespace OctoMap.Projection
 
             protected override Expression VisitParameter(ParameterExpression node)
                 => ReferenceEquals(node, _from) ? _to : base.VisitParameter(node);
+        }
+
+        private sealed class ProjectionParameterReplacementVisitor : ExpressionVisitor
+        {
+            private readonly ProjectionParameterBag _parameters;
+
+            public ProjectionParameterReplacementVisitor(ProjectionParameterBag parameters)
+            {
+                _parameters = parameters;
+            }
+
+            protected override Expression VisitMember(MemberExpression node)
+            {
+                if (node.Expression is ConstantExpression
+                    && _parameters.TryGetValue(node.Member.Name, out var value))
+                {
+                    var constant = Expression.Constant(value, value == null ? node.Type : value.GetType());
+                    return constant.Type == node.Type
+                        ? constant
+                        : Expression.Convert(constant, node.Type);
+                }
+
+                return base.VisitMember(node);
+            }
+        }
+
+        private sealed class ProjectionParameterBag
+        {
+            private readonly IReadOnlyDictionary<string, object> _values;
+
+            private ProjectionParameterBag(IReadOnlyDictionary<string, object> values)
+            {
+                _values = values;
+            }
+
+            public bool IsEmpty => _values.Count == 0;
+
+            public static ProjectionParameterBag From(object parameters)
+            {
+                if (parameters == null)
+                {
+                    return new ProjectionParameterBag(new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase));
+                }
+
+                if (parameters is IReadOnlyDictionary<string, object> readOnlyDictionary)
+                {
+                    return new ProjectionParameterBag(new Dictionary<string, object>(readOnlyDictionary, StringComparer.OrdinalIgnoreCase));
+                }
+
+                if (parameters is IDictionary<string, object> dictionary)
+                {
+                    return new ProjectionParameterBag(new Dictionary<string, object>(dictionary, StringComparer.OrdinalIgnoreCase));
+                }
+
+                var values = parameters.GetType()
+                    .GetProperties(BindingFlags.Instance | BindingFlags.Public)
+                    .Where(x => x.CanRead)
+                    .ToDictionary(x => x.Name, x => x.GetValue(parameters), StringComparer.OrdinalIgnoreCase);
+                return new ProjectionParameterBag(values);
+            }
+
+            public bool TryGetValue(string name, out object value)
+                => _values.TryGetValue(name, out value);
         }
     }
 }

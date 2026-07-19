@@ -103,6 +103,21 @@ namespace OctoMap.Samples.Basic
 
             Console.WriteLine($"Projection map: {projectedProduct.Sku} - {projectedProduct.Price}");
 
+            var labelPrefix = "Projected SKU";
+            var projectedProductLabel = new[]
+            {
+                new Product
+                {
+                    Sku = "OCTO-PARAM",
+                    Price = 39.95m
+                }
+            }
+            .AsQueryable()
+            .ProjectTo<ProductLabelDto>(_mapper.ProjectionBuilder, new { labelPrefix })
+            .Single();
+
+            Console.WriteLine($"Parameterized projection map: {projectedProductLabel.Label}");
+
             var projectedEfProduct = RunEfProjectionSample();
             Console.WriteLine($"EF SQLite projection map: {projectedEfProduct.Sku} - {projectedEfProduct.Price}");
 

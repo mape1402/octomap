@@ -96,6 +96,46 @@ namespace OctoMap.Tests
             Assert.Contains("runtime-only", exception.Message);
         }
 
+        [Fact]
+        public void ProjectTo_Replaces_Closure_Values_With_Anonymous_Object_Parameters()
+        {
+            var provider = CreateProvider<ParameterizedProjectionProfile>();
+            var mapper = provider.GetRequiredService<IOctoMapper>();
+
+            var destination = new[]
+            {
+                new ProjectionOrder
+                {
+                    Code = "ORD-1"
+                }
+            }
+            .AsQueryable()
+            .ProjectTo<ParameterizedProjectionDto>(mapper.ProjectionBuilder, new { prefix = "Projected" })
+            .Single();
+
+            Assert.Equal("Projected:ORD-1", destination.Label);
+        }
+
+        [Fact]
+        public void Build_Replaces_Closure_Values_With_Dictionary_Parameters()
+        {
+            var provider = CreateProvider<ParameterizedProjectionProfile>();
+            var projectionBuilder = provider.GetRequiredService<IOctoMapper>().ProjectionBuilder;
+
+            var projection = projectionBuilder.Build<ProjectionOrder, ParameterizedProjectionDto>(
+                new Dictionary<string, object> { ["prefix"] = "Dictionary" });
+
+            var destination = new[]
+            {
+                new ProjectionOrder
+                {
+                    Code = "ORD-2"
+                }
+            }.AsQueryable().Select(projection).Single();
+
+            Assert.Equal("Dictionary:ORD-2", destination.Label);
+        }
+
         private static ServiceProvider CreateProvider<TProfile>()
             where TProfile : OctoMapProfile, new()
         {
@@ -147,6 +187,16 @@ namespace OctoMap.Tests
             {
                 builder.CreateConverter<ProjectionAmountTextConverter, decimal, ProjectionAmountText>();
                 builder.CreateMap<ProjectionCollectionAmountOrder, ProjectionCollectionAmountOrderDto>();
+            }
+        }
+
+        public sealed class ParameterizedProjectionProfile : OctoMapProfile
+        {
+            public override void Configure(IOctoMapConfigurationBuilder builder)
+            {
+                var prefix = "Default";
+                builder.CreateMap<ProjectionOrder, ParameterizedProjectionDto>()
+                    .ForMember(x => x.Label, x => x.MapFrom(s => prefix + ":" + s.Code));
             }
         }
 
@@ -215,6 +265,11 @@ namespace OctoMap.Tests
         public sealed class ProjectionCollectionAmountOrderDto
         {
             public List<ProjectionAmountText> Amounts { get; set; }
+        }
+
+        public sealed class ParameterizedProjectionDto
+        {
+            public string Label { get; set; }
         }
 
         public sealed record ProjectionAmountText(string Value);
