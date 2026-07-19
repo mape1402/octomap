@@ -332,7 +332,7 @@ namespace OctoMap.Projection
                 throw new InvalidOperationException($"Projection map '{sourceType.FullName}->{destinationType.FullName}' is not configured and runtime implicit maps are disabled.");
             }
 
-            return new TypeMap(sourceType, destinationType, true);
+            return new TypeMap(sourceType, destinationType, true, _options, new Configuration.MapDeclaration("Runtime implicit projection map"));
         }
 
         private static Expression ReplaceParameter(Expression expression, ParameterExpression from, Expression to)

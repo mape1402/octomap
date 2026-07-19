@@ -21,6 +21,7 @@ OctoMap is designed for applications that want AutoMapper-style configuration, b
 - Supports first-pass open generic map registration.
 - Supports attribute-based map registration and member configuration.
 - Supports configurable member naming conventions.
+- Supports explicit registration organization through profiles, assembly scans, filters, duplicate policies, and configuration diagnostics.
 - Uses DynaBee-generated method bodies and invokers for hot execution paths.
 - Integrates with `Microsoft.Extensions.DependencyInjection`.
 
@@ -78,6 +79,18 @@ var provider = services.BuildServiceProvider();
 var mapper = provider.GetRequiredService<IOctoMapper>();
 ```
 
+For larger applications, prefer the registration builder so profile scanning, interface/attribute scanning, options, and duplicate behavior are explicit.
+
+```csharp
+services.AddOctoMap(registration =>
+{
+    registration.Options.EnableRuntimeImplicitMaps = true;
+    registration.Options.DuplicateMapPolicy = DuplicateMapPolicy.Throw;
+
+    registration.AddMaps(typeof(SalesProfile).Assembly);
+});
+```
+
 Define a profile:
 
 ```csharp
@@ -97,6 +110,72 @@ Map objects:
 ```csharp
 var dto = mapper.Map<Customer, CustomerDto>(customer);
 ```
+
+## Configuration Organization
+
+`AddOctoMap(...)` supports a registration builder for applications that need clear startup composition.
+
+```csharp
+services.AddOctoMap(registration =>
+{
+    registration.Options.EnableRuntimeImplicitMaps = false;
+    registration.Options.DuplicateMapPolicy = DuplicateMapPolicy.Throw;
+
+    registration.AddProfile<SalesProfile>();
+    registration.AddProfilesFromAssembly(typeof(BillingProfile).Assembly);
+    registration.AddMaps(typeof(WarehouseItemDto).Assembly);
+});
+```
+
+Registration methods:
+
+- `AddProfile<TProfile>()`: registers one profile explicitly.
+- `AddProfile(profile)`: registers a profile instance.
+- `AddProfilesFromAssembly(assembly)`: discovers `OctoMapProfile` types only.
+- `AddMaps(assembly)`: discovers profiles, `IMapFrom<T>`, `IMapTo<T>`, `[MapFrom]`, and `[MapTo]`.
+- `WhereProfile(predicate)`: filters discovered profiles.
+- `WhereMapType(predicate)`: filters interface and attribute map declaration types.
+
+Duplicate explicit map declarations are controlled with `DuplicateMapPolicy`.
+
+```csharp
+registration.Options.DuplicateMapPolicy = DuplicateMapPolicy.Throw;
+```
+
+Policies:
+
+- `Merge`: keeps the existing map and lets later configuration contribute to it.
+- `Throw`: fails startup when the same explicit source/destination pair is declared twice.
+- `Replace`: replaces the existing map with the later declaration.
+
+Each map captures the active options when it is declared. This matters when profiles use different naming conventions or null-handling settings; later profile changes do not rewrite already-declared maps.
+
+```csharp
+public sealed class LegacyProfile : OctoMapProfile
+{
+    public override void Configure(IOctoMapConfigurationBuilder builder)
+    {
+        builder.UseSourceNamingConvention(SnakeCaseNamingConvention.Instance);
+        builder.UseDestinationNamingConvention(PascalCaseNamingConvention.Instance);
+        builder.CreateMap<LegacyOrder, LegacyOrderDto>();
+
+        builder.UseSourceNamingConvention(ExactNamingConvention.Instance);
+        builder.UseDestinationNamingConvention(ExactNamingConvention.Instance);
+        builder.CreateMap<Product, ProductDto>();
+    }
+}
+```
+
+Loaded profiles and map declarations can be inspected from `IOctoMapConfiguration`.
+
+```csharp
+var configuration = provider.GetRequiredService<IOctoMapConfiguration>();
+
+IReadOnlyList<string> profiles = configuration.GetProfiles();
+string description = configuration.DescribeConfiguration();
+```
+
+`DescribeConfiguration()` lists loaded profiles, single-source maps, multi-source maps, and the declaration source for each single-source map. This diagnostic layer stays in OctoMap and does not expose DynaBee internals.
 
 ## Single-Source Maps
 
@@ -926,6 +1005,7 @@ Configured map: 100 - Grace Hopper - internal 'ignored'
 Existing destination map: same instance True - Grace Hopper - internal 'preserved'
 Ignore null source value patch: Grace Hopper
 Plan description: CustomerDto.Id <- Customer.Id
+Configuration diagnostics: 1 profile loaded
 Constructor map: 100 - Grace Hopper
 Implicit map: OCTO-001 - 49.95
 Reverse map: OCTO-001 - 49.95

@@ -70,6 +70,18 @@ namespace OctoMap
         string DescribeMap(IReadOnlyList<Type> sourceTypes, Type destinationType);
 
         /// <summary>
+        /// Gets the profile names loaded into the current configuration.
+        /// </summary>
+        /// <returns>The loaded profile names.</returns>
+        IReadOnlyList<string> GetProfiles();
+
+        /// <summary>
+        /// Describes the configured profiles and maps.
+        /// </summary>
+        /// <returns>The configuration description.</returns>
+        string DescribeConfiguration();
+
+        /// <summary>
         /// Validates the current configuration.
         /// </summary>
         /// <returns>The validation report.</returns>

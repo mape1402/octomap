@@ -30,6 +30,31 @@ namespace OctoMap
             => services.AddOctoMap(_ => { }, profileAssemblies);
 
         /// <summary>
+        /// Registers OctoMap using explicit registration configuration.
+        /// </summary>
+        /// <param name="services">The service collection.</param>
+        /// <param name="configure">The registration configuration callback.</param>
+        /// <returns>The same service collection.</returns>
+        public static IServiceCollection AddOctoMap(
+            this IServiceCollection services,
+            Action<IOctoMapRegistrationBuilder> configure)
+        {
+            if (services == null)
+            {
+                throw new ArgumentNullException(nameof(services));
+            }
+
+            if (configure == null)
+            {
+                throw new ArgumentNullException(nameof(configure));
+            }
+
+            var registrationBuilder = new OctoMapRegistrationBuilder();
+            configure(registrationBuilder);
+            return services.AddOctoMap(registrationBuilder);
+        }
+
+        /// <summary>
         /// Registers OctoMap using options and profiles discovered from the specified assemblies.
         /// </summary>
         /// <param name="services">The service collection.</param>
@@ -46,11 +71,34 @@ namespace OctoMap
                 throw new ArgumentNullException(nameof(services));
             }
 
-            var options = new OctoMapOptions();
-            configureOptions?.Invoke(options);
+            var registrationBuilder = new OctoMapRegistrationBuilder();
+            configureOptions?.Invoke(registrationBuilder.Options);
+            foreach (var assembly in profileAssemblies ?? Array.Empty<Assembly>())
+            {
+                registrationBuilder.AddMaps(assembly);
+            }
+
+            return services.AddOctoMap(registrationBuilder);
+        }
+
+        private static IServiceCollection AddOctoMap(
+            this IServiceCollection services,
+            OctoMapRegistrationBuilder registrationBuilder)
+        {
+            if (services == null)
+            {
+                throw new ArgumentNullException(nameof(services));
+            }
+
+            var options = registrationBuilder.Options;
 
             var discovery = new OctoMapProfileDiscovery();
-            var configurationBuilder = BuildConfigurationBuilder(options, discovery.Discover(profileAssemblies), profileAssemblies);
+            var discoveredProfiles = discovery
+                .Discover(registrationBuilder.ProfileAssemblies.ToArray())
+                .Where(x => registrationBuilder.AllowsProfile(x.GetType()))
+                .ToArray();
+            var profiles = registrationBuilder.Profiles.Concat(discoveredProfiles).ToArray();
+            var configurationBuilder = BuildConfigurationBuilder(options, profiles, registrationBuilder.MapAssemblies, registrationBuilder);
             var maps = configurationBuilder.Maps;
             var multiMaps = configurationBuilder.MultiMaps;
             var typeConversions = configurationBuilder.TypeConversions;
@@ -67,6 +115,7 @@ namespace OctoMap
             services.AddSingleton(sp => new OctoMapConfiguration(
                 maps,
                 multiMaps,
+                profiles.Select(x => x.GetType().FullName ?? x.GetType().Name).ToArray(),
                 sp.GetRequiredService<IOctoMapValidator>(),
                 sp.GetRequiredService<IMappingPlanBuilder>(),
                 sp.GetRequiredService<IMappingPlanDescriber>()));
@@ -86,29 +135,34 @@ namespace OctoMap
         private static OctoMapConfigurationBuilder BuildConfigurationBuilder(
             OctoMapOptions options,
             IReadOnlyCollection<OctoMapProfile> profiles,
-            IReadOnlyCollection<Assembly> profileAssemblies)
+            IReadOnlyCollection<Assembly> mapAssemblies,
+            OctoMapRegistrationBuilder registrationBuilder)
         {
             var builder = new OctoMapConfigurationBuilder(options);
+            var defaultOptions = options.Clone();
             foreach (var profile in profiles)
             {
+                builder.ResetOptions(defaultOptions);
+                builder.CurrentDeclarationSource = $"Profile {profile.GetType().FullName}";
                 profile.Configure(builder);
             }
 
-            foreach (var assembly in profileAssemblies ?? Array.Empty<Assembly>())
+            builder.ResetOptions(defaultOptions);
+            foreach (var assembly in mapAssemblies ?? Array.Empty<Assembly>())
             {
-                RegisterInterfaceMaps(builder, assembly);
-                RegisterAttributeMaps(builder, assembly);
+                RegisterInterfaceMaps(builder, assembly, registrationBuilder);
+                RegisterAttributeMaps(builder, assembly, registrationBuilder);
             }
 
             ApplyAttributeMemberMaps(builder);
             return builder;
         }
 
-        private static void RegisterInterfaceMaps(OctoMapConfigurationBuilder builder, Assembly assembly)
+        private static void RegisterInterfaceMaps(OctoMapConfigurationBuilder builder, Assembly assembly, OctoMapRegistrationBuilder registrationBuilder)
         {
             foreach (var type in assembly.GetTypes())
             {
-                if (type.IsAbstract || type.IsInterface)
+                if (type.IsAbstract || type.IsInterface || !registrationBuilder.AllowsMapType(type))
                 {
                     continue;
                 }
@@ -125,33 +179,37 @@ namespace OctoMap
 
                     if (genericDefinition == typeof(IMapFrom<>))
                     {
+                        builder.CurrentDeclarationSource = $"IMapFrom on {type.FullName}";
                         builder.CreateMap(relatedType, type);
                     }
 
                     if (genericDefinition == typeof(IMapTo<>))
                     {
+                        builder.CurrentDeclarationSource = $"IMapTo on {type.FullName}";
                         builder.CreateMap(type, relatedType);
                     }
                 }
             }
         }
 
-        private static void RegisterAttributeMaps(OctoMapConfigurationBuilder builder, Assembly assembly)
+        private static void RegisterAttributeMaps(OctoMapConfigurationBuilder builder, Assembly assembly, OctoMapRegistrationBuilder registrationBuilder)
         {
             foreach (var type in assembly.GetTypes())
             {
-                if (type.IsAbstract || type.IsInterface)
+                if (type.IsAbstract || type.IsInterface || !registrationBuilder.AllowsMapType(type))
                 {
                     continue;
                 }
 
                 foreach (var mapFrom in type.GetCustomAttributes<MapFromAttribute>())
                 {
+                    builder.CurrentDeclarationSource = $"MapFromAttribute on {type.FullName}";
                     builder.CreateMap(mapFrom.SourceType, type);
                 }
 
                 foreach (var mapTo in type.GetCustomAttributes<MapToAttribute>())
                 {
+                    builder.CurrentDeclarationSource = $"MapToAttribute on {type.FullName}";
                     builder.CreateMap(type, mapTo.DestinationType);
                 }
             }

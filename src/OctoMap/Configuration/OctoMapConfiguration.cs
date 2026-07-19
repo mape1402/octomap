@@ -10,6 +10,7 @@ namespace OctoMap.Configuration
     {
         private readonly IReadOnlyDictionary<MapKey, TypeMap> _maps;
         private readonly IReadOnlyDictionary<MapKey, MultiSourceTypeMap> _multiMaps;
+        private readonly IReadOnlyList<string> _profiles;
         private readonly IOctoMapValidator _validator;
         private readonly IMappingPlanBuilder _planBuilder;
         private readonly IMappingPlanDescriber _planDescriber;
@@ -19,18 +20,21 @@ namespace OctoMap.Configuration
         /// </summary>
         /// <param name="maps">The configured maps.</param>
         /// <param name="multiMaps">The configured multi-source maps.</param>
+        /// <param name="profiles">The loaded profile names.</param>
         /// <param name="validator">The configuration validator.</param>
         /// <param name="planBuilder">The mapping plan builder.</param>
         /// <param name="planDescriber">The mapping plan describer.</param>
         public OctoMapConfiguration(
             IReadOnlyDictionary<MapKey, TypeMap> maps,
             IReadOnlyDictionary<MapKey, MultiSourceTypeMap> multiMaps,
+            IReadOnlyList<string> profiles,
             IOctoMapValidator validator,
             IMappingPlanBuilder planBuilder,
             IMappingPlanDescriber planDescriber)
         {
             _maps = maps ?? throw new ArgumentNullException(nameof(maps));
             _multiMaps = multiMaps ?? throw new ArgumentNullException(nameof(multiMaps));
+            _profiles = profiles ?? throw new ArgumentNullException(nameof(profiles));
             _validator = validator ?? throw new ArgumentNullException(nameof(validator));
             _planBuilder = planBuilder ?? throw new ArgumentNullException(nameof(planBuilder));
             _planDescriber = planDescriber ?? throw new ArgumentNullException(nameof(planDescriber));
@@ -108,6 +112,55 @@ namespace OctoMap.Configuration
             => _planDescriber.Describe(GetPlan(sourceTypes, destinationType));
 
         /// <inheritdoc/>
+        public IReadOnlyList<string> GetProfiles()
+            => _profiles;
+
+        /// <inheritdoc/>
+        public string DescribeConfiguration()
+        {
+            var lines = new List<string>
+            {
+                "Profiles:"
+            };
+
+            if (_profiles.Count == 0)
+            {
+                lines.Add("- none");
+            }
+            else
+            {
+                lines.AddRange(_profiles.OrderBy(x => x).Select(x => $"- {x}"));
+            }
+
+            lines.Add("Maps:");
+            if (_maps.Count == 0)
+            {
+                lines.Add("- none");
+            }
+            else
+            {
+                lines.AddRange(_maps.Values
+                    .OrderBy(x => x.SourceType.FullName)
+                    .ThenBy(x => x.DestinationType.FullName)
+                    .Select(x => $"- {FormatType(x.SourceType)} -> {FormatType(x.DestinationType)} ({x.Declaration.Source})"));
+            }
+
+            lines.Add("Multi-source maps:");
+            if (_multiMaps.Count == 0)
+            {
+                lines.Add("- none");
+            }
+            else
+            {
+                lines.AddRange(_multiMaps.Values
+                    .OrderBy(x => x.DestinationType.FullName)
+                    .Select(x => $"- {string.Join(", ", x.SourceTypes.Select(FormatType))} -> {FormatType(x.DestinationType)}"));
+            }
+
+            return string.Join(Environment.NewLine, lines);
+        }
+
+        /// <inheritdoc/>
         public OctoMapValidationReport Validate()
             => _validator.Validate(_maps.Values.Cast<ITypeMap>().Concat(_multiMaps.Values).ToArray());
 
@@ -178,8 +231,11 @@ namespace OctoMap.Configuration
                 return false;
             }
 
-            map = new TypeMap(sourceType, destinationType, false);
+            map = new TypeMap(sourceType, destinationType, false, openMap.Options, new MapDeclaration($"Closed generic map from {openMap.Declaration.Source}"));
             return true;
         }
+
+        private static string FormatType(Type type)
+            => type.FullName ?? type.Name;
     }
 }

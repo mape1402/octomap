@@ -35,7 +35,8 @@ namespace OctoMap.Planning
                 return BuildMultiSource(multiSourceTypeMap);
             }
 
-            var sourceProperties = BuildSourcePropertyIndex(typeMap.SourceType);
+            var options = GetOptions(typeMap);
+            var sourceProperties = BuildSourcePropertyIndex(typeMap.SourceType, options);
 
             var explicitMemberMaps = typeMap is TypeMap configuredTypeMap
                 ? configuredTypeMap.MemberMaps
@@ -53,7 +54,7 @@ namespace OctoMap.Planning
             var configuredConstructionExpression = typeMap is TypeMap configuredConstructionTypeMap
                 ? configuredConstructionTypeMap.ConstructionExpression
                 : null;
-            var construction = CreateConstructionPlan(typeMap.SourceType, typeMap.DestinationType, sourceProperties, configuredConstructionExpression);
+            var construction = CreateConstructionPlan(typeMap.SourceType, typeMap.DestinationType, sourceProperties, configuredConstructionExpression, options);
 
             var assignments = new List<MemberAssignmentPlan>();
             foreach (var destinationProperty in typeMap.DestinationType.GetProperties(BindingFlags.Instance | BindingFlags.Public))
@@ -105,9 +106,9 @@ namespace OctoMap.Planning
                     }
                 }
 
-                if (!sourceProperties.TryGetValue(GetDestinationMemberKey(destinationProperty.Name), out var sourceProperty))
+                if (!sourceProperties.TryGetValue(GetDestinationMemberKey(destinationProperty.Name, options), out var sourceProperty))
                 {
-                    if (TryCreateFlattenedAssignment(destinationProperty, sourceProperties, out var flattenedAssignment))
+                    if (TryCreateFlattenedAssignment(destinationProperty, sourceProperties, options, out var flattenedAssignment))
                     {
                         assignments.Add(flattenedAssignment);
                     }
@@ -116,7 +117,7 @@ namespace OctoMap.Planning
                 }
 
                 explicitRootMemberMaps.TryGetValue(destinationProperty.Name, out var configuredMemberMap);
-                if (TryCreateCollectionAssignment(destinationProperty, sourceProperty, configuredMemberMap, out var collectionAssignment))
+                if (TryCreateCollectionAssignment(destinationProperty, sourceProperty, configuredMemberMap, options, out var collectionAssignment))
                 {
                     assignments.Add(collectionAssignment);
                     continue;
@@ -153,14 +154,14 @@ namespace OctoMap.Planning
                             null,
                             false,
                             null,
-                            configuredMemberMap?.IgnoreNullSourceValue ?? _options.IgnoreNullSourceValues,
+                            configuredMemberMap?.IgnoreNullSourceValue ?? options.IgnoreNullSourceValues,
                             0));
                     }
 
                     continue;
                 }
 
-                assignments.Add(CreateAssignment(destinationProperty, sourceProperty, null, memberMap));
+                assignments.Add(CreateAssignment(destinationProperty, sourceProperty, null, memberMap, options));
             }
 
             foreach (var memberMap in explicitPathMemberMaps)
@@ -170,7 +171,7 @@ namespace OctoMap.Planning
                     continue;
                 }
 
-                assignments.Add(CreateAssignment(memberMap.DestinationProperty, null, memberMap.SourceExpression, memberMap));
+                assignments.Add(CreateAssignment(memberMap.DestinationProperty, null, memberMap.SourceExpression, memberMap, options));
             }
 
             return new MappingPlan(
@@ -186,14 +187,17 @@ namespace OctoMap.Planning
         private static bool CanWrite(PropertyInfo property)
             => property.CanWrite && property.SetMethod != null && property.SetMethod.IsPublic;
 
-        private IReadOnlyDictionary<string, PropertyInfo> BuildSourcePropertyIndex(Type sourceType)
+        private static OctoMapOptions GetOptions(ITypeMap typeMap)
+            => typeMap is TypeMap configuredTypeMap ? configuredTypeMap.Options : new OctoMapOptions();
+
+        private static IReadOnlyDictionary<string, PropertyInfo> BuildSourcePropertyIndex(Type sourceType, OctoMapOptions options)
         {
             var sourceProperties = new Dictionary<string, PropertyInfo>(StringComparer.OrdinalIgnoreCase);
             foreach (var property in sourceType
                 .GetProperties(BindingFlags.Instance | BindingFlags.Public)
                 .Where(x => x.CanRead && x.GetMethod != null))
             {
-                var key = GetSourceMemberKey(property.Name);
+                var key = GetSourceMemberKey(property.Name, options);
                 if (sourceProperties.TryGetValue(key, out var existingProperty))
                 {
                     throw new InvalidOperationException($"Source type '{sourceType.FullName}' has ambiguous members '{existingProperty.Name}' and '{property.Name}' for normalized member name '{key}'. Configure one member explicitly with ForMember.");
@@ -205,17 +209,17 @@ namespace OctoMap.Planning
             return sourceProperties;
         }
 
-        private string GetSourceMemberKey(string memberName)
-            => _options.SourceNamingConvention.Normalize(ApplyAffixes(
+        private static string GetSourceMemberKey(string memberName, OctoMapOptions options)
+            => options.SourceNamingConvention.Normalize(ApplyAffixes(
                 memberName,
-                _options.SourceMemberPrefixes,
-                _options.SourceMemberSuffixes));
+                options.SourceMemberPrefixes,
+                options.SourceMemberSuffixes));
 
-        private string GetDestinationMemberKey(string memberName)
-            => _options.DestinationNamingConvention.Normalize(ApplyAffixes(
+        private static string GetDestinationMemberKey(string memberName, OctoMapOptions options)
+            => options.DestinationNamingConvention.Normalize(ApplyAffixes(
                 memberName,
-                _options.DestinationMemberPrefixes,
-                _options.DestinationMemberSuffixes));
+                options.DestinationMemberPrefixes,
+                options.DestinationMemberSuffixes));
 
         private static string ApplyAffixes(
             string memberName,
@@ -254,7 +258,22 @@ namespace OctoMap.Planning
                 sourceProperty,
                 sourceExpression,
                 memberMap,
-                ResolveConversion(sourceProperty, sourceExpression, memberMap, destinationProperty.PropertyType));
+                ResolveConversion(sourceProperty, sourceExpression, memberMap, destinationProperty.PropertyType),
+                _options);
+
+        private MemberAssignmentPlan CreateAssignment(
+            PropertyInfo destinationProperty,
+            PropertyInfo sourceProperty,
+            System.Linq.Expressions.LambdaExpression sourceExpression,
+            MemberMap memberMap,
+            OctoMapOptions options)
+            => CreateAssignment(
+                destinationProperty,
+                sourceProperty,
+                sourceExpression,
+                memberMap,
+                ResolveConversion(sourceProperty, sourceExpression, memberMap, destinationProperty.PropertyType),
+                options);
 
         private MemberAssignmentPlan CreateAssignment(
             PropertyInfo destinationProperty,
@@ -262,6 +281,15 @@ namespace OctoMap.Planning
             System.Linq.Expressions.LambdaExpression sourceExpression,
             MemberMap memberMap,
             TypeConversionMap typeConversion)
+            => CreateAssignment(destinationProperty, sourceProperty, sourceExpression, memberMap, typeConversion, _options);
+
+        private MemberAssignmentPlan CreateAssignment(
+            PropertyInfo destinationProperty,
+            PropertyInfo sourceProperty,
+            System.Linq.Expressions.LambdaExpression sourceExpression,
+            MemberMap memberMap,
+            TypeConversionMap typeConversion,
+            OctoMapOptions options)
             => new(
                 destinationProperty,
                 sourceProperty,
@@ -283,7 +311,7 @@ namespace OctoMap.Planning
                 memberMap?.ConstantValue,
                 memberMap?.HasNullSubstitute == true,
                 memberMap?.NullSubstitute,
-                memberMap?.IgnoreNullSourceValue ?? _options.IgnoreNullSourceValues,
+                memberMap?.IgnoreNullSourceValue ?? options.IgnoreNullSourceValues,
                 0,
                 null,
                 memberMap?.DestinationPath);
@@ -379,9 +407,10 @@ namespace OctoMap.Planning
             Type sourceType,
             Type destinationType,
             IReadOnlyDictionary<string, PropertyInfo> sourceProperties,
-            System.Linq.Expressions.LambdaExpression constructionExpression)
+            System.Linq.Expressions.LambdaExpression constructionExpression,
+            OctoMapOptions options)
         {
-            EnsureDestinationCanBeCreated(sourceType, destinationType, sourceProperties, constructionExpression);
+            EnsureDestinationCanBeCreated(sourceType, destinationType, sourceProperties, constructionExpression, options);
 
             if (constructionExpression != null)
             {
@@ -394,7 +423,7 @@ namespace OctoMap.Planning
                 return null;
             }
 
-            if (!TrySelectConventionConstructor(destinationType, sourceProperties, out var constructor, out var parameterPlans))
+            if (!TrySelectConventionConstructor(destinationType, sourceProperties, options, out var constructor, out var parameterPlans))
             {
                 return null;
             }
@@ -460,7 +489,8 @@ namespace OctoMap.Planning
             Type sourceType,
             Type destinationType,
             IReadOnlyDictionary<string, PropertyInfo> sourceProperties,
-            System.Linq.Expressions.LambdaExpression constructionExpression)
+            System.Linq.Expressions.LambdaExpression constructionExpression,
+            OctoMapOptions options)
         {
             if (destinationType.IsAbstract || destinationType.IsInterface)
             {
@@ -472,7 +502,7 @@ namespace OctoMap.Planning
                 return;
             }
 
-            if (!TrySelectConventionConstructor(destinationType, sourceProperties, out _, out _))
+            if (!TrySelectConventionConstructor(destinationType, sourceProperties, options, out _, out _))
             {
                 throw new InvalidOperationException($"Destination type '{destinationType.FullName}' must have a public parameterless constructor or constructor parameters that match readable source properties on '{sourceType.FullName}'.");
             }
@@ -481,6 +511,7 @@ namespace OctoMap.Planning
         private bool TrySelectConventionConstructor(
             Type destinationType,
             IReadOnlyDictionary<string, PropertyInfo> sourceProperties,
+            OctoMapOptions options,
             out ConstructorInfo constructor,
             out IReadOnlyList<ConstructorParameterPlan> parameterPlans)
         {
@@ -499,7 +530,7 @@ namespace OctoMap.Planning
                 var canUseConstructor = true;
                 foreach (var parameter in parameters)
                 {
-                    if (!sourceProperties.TryGetValue(GetDestinationMemberKey(parameter.Name), out var sourceProperty))
+                    if (!sourceProperties.TryGetValue(GetDestinationMemberKey(parameter.Name, options), out var sourceProperty))
                     {
                         canUseConstructor = false;
                         break;
@@ -571,6 +602,7 @@ namespace OctoMap.Planning
             PropertyInfo destinationProperty,
             PropertyInfo sourceProperty,
             MemberMap memberMap,
+            OctoMapOptions options,
             out MemberAssignmentPlan assignment)
         {
             assignment = null;
@@ -601,12 +633,12 @@ namespace OctoMap.Planning
                 sourceElementType,
                 destinationElementType,
                 elementTypeConversion,
-                memberMap?.AllowNullCollection ?? _options.AllowNullCollections,
+                memberMap?.AllowNullCollection ?? options.AllowNullCollections,
                 false,
                 null,
                 false,
                 null,
-                memberMap?.IgnoreNullSourceValue ?? _options.IgnoreNullSourceValues,
+                memberMap?.IgnoreNullSourceValue ?? options.IgnoreNullSourceValues,
                 0);
             return true;
         }
@@ -614,10 +646,11 @@ namespace OctoMap.Planning
         private bool TryCreateFlattenedAssignment(
             PropertyInfo destinationProperty,
             IReadOnlyDictionary<string, PropertyInfo> sourceProperties,
+            OctoMapOptions options,
             out MemberAssignmentPlan assignment)
         {
             assignment = null;
-            if (!TryResolveSourcePath(GetDestinationMemberKey(destinationProperty.Name), sourceProperties.Values, out var sourcePath))
+            if (!TryResolveSourcePath(GetDestinationMemberKey(destinationProperty.Name, options), sourceProperties.Values, options, out var sourcePath))
             {
                 return false;
             }
@@ -651,7 +684,7 @@ namespace OctoMap.Planning
                 null,
                 false,
                 null,
-                _options.IgnoreNullSourceValues,
+                options.IgnoreNullSourceValues,
                 0,
                 sourcePath);
             return true;
@@ -660,14 +693,15 @@ namespace OctoMap.Planning
         private bool TryResolveSourcePath(
             string destinationKey,
             IEnumerable<PropertyInfo> sourceProperties,
+            OctoMapOptions options,
             out IReadOnlyList<PropertyInfo> sourcePath)
         {
             foreach (var sourceProperty in sourceProperties
                 .Where(x => IsFlattenableSourceType(x.PropertyType))
-                .OrderByDescending(x => GetSourceMemberKey(x.Name).Length)
+                .OrderByDescending(x => GetSourceMemberKey(x.Name, options).Length)
                 .ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase))
             {
-                var sourceKey = GetSourceMemberKey(sourceProperty.Name);
+                var sourceKey = GetSourceMemberKey(sourceProperty.Name, options);
                 if (!destinationKey.StartsWith(sourceKey, StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
@@ -679,7 +713,7 @@ namespace OctoMap.Planning
                     continue;
                 }
 
-                if (TryResolveSourcePath(remainingName, sourceProperty.PropertyType, out var nestedPath))
+                if (TryResolveSourcePath(remainingName, sourceProperty.PropertyType, options, out var nestedPath))
                 {
                     sourcePath = new[] { sourceProperty }.Concat(nestedPath).ToArray();
                     return true;
@@ -690,7 +724,7 @@ namespace OctoMap.Planning
             return false;
         }
 
-        private bool TryResolveSourcePath(string destinationKey, Type sourceType, out IReadOnlyList<PropertyInfo> sourcePath)
+        private bool TryResolveSourcePath(string destinationKey, Type sourceType, OctoMapOptions options, out IReadOnlyList<PropertyInfo> sourcePath)
         {
             var sourceProperties = sourceType
                 .GetProperties(BindingFlags.Instance | BindingFlags.Public)
@@ -698,14 +732,14 @@ namespace OctoMap.Planning
                 .ToArray();
 
             var directProperty = sourceProperties
-                .FirstOrDefault(x => string.Equals(GetSourceMemberKey(x.Name), destinationKey, StringComparison.OrdinalIgnoreCase));
+                .FirstOrDefault(x => string.Equals(GetSourceMemberKey(x.Name, options), destinationKey, StringComparison.OrdinalIgnoreCase));
             if (directProperty != null)
             {
                 sourcePath = new[] { directProperty };
                 return true;
             }
 
-            return TryResolveSourcePath(destinationKey, sourceProperties, out sourcePath);
+            return TryResolveSourcePath(destinationKey, sourceProperties, options, out sourcePath);
         }
 
         private static bool IsFlattenableSourceType(Type type)

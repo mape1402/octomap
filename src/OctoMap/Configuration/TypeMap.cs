@@ -17,10 +17,30 @@ namespace OctoMap.Configuration
         /// <param name="destinationType">The destination type.</param>
         /// <param name="isImplicit">A value indicating whether the map is implicit.</param>
         public TypeMap(Type sourceType, Type destinationType, bool isImplicit)
+            : this(sourceType, destinationType, isImplicit, new OctoMapOptions(), new MapDeclaration(isImplicit ? "Runtime implicit map" : "Explicit map"))
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="TypeMap"/> class.
+        /// </summary>
+        /// <param name="sourceType">The source type.</param>
+        /// <param name="destinationType">The destination type.</param>
+        /// <param name="isImplicit">A value indicating whether the map is implicit.</param>
+        /// <param name="options">The map options snapshot.</param>
+        /// <param name="declaration">The map declaration.</param>
+        public TypeMap(
+            Type sourceType,
+            Type destinationType,
+            bool isImplicit,
+            OctoMapOptions options,
+            MapDeclaration declaration)
         {
             SourceType = sourceType ?? throw new ArgumentNullException(nameof(sourceType));
             DestinationType = destinationType ?? throw new ArgumentNullException(nameof(destinationType));
             IsImplicit = isImplicit;
+            Options = options?.Clone() ?? throw new ArgumentNullException(nameof(options));
+            Declaration = declaration ?? throw new ArgumentNullException(nameof(declaration));
         }
 
         /// <inheritdoc/>
@@ -31,6 +51,25 @@ namespace OctoMap.Configuration
 
         /// <inheritdoc/>
         public bool IsImplicit { get; }
+
+        /// <summary>
+        /// Gets the map options snapshot.
+        /// </summary>
+        public OctoMapOptions Options { get; }
+
+        /// <summary>
+        /// Gets the map declaration.
+        /// </summary>
+        public MapDeclaration Declaration { get; private set; }
+
+        /// <summary>
+        /// Sets the map declaration.
+        /// </summary>
+        /// <param name="declaration">The map declaration.</param>
+        public void SetDeclaration(MapDeclaration declaration)
+        {
+            Declaration = declaration ?? throw new ArgumentNullException(nameof(declaration));
+        }
 
         /// <summary>
         /// Gets the explicitly configured member maps.

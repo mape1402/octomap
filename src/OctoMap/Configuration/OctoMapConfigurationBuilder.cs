@@ -47,17 +47,29 @@ namespace OctoMap.Configuration
         internal IReadOnlyDictionary<int, Action<object, object, IMapContext>> InlineLifecycleActions
             => new Dictionary<int, Action<object, object, IMapContext>>(_inlineLifecycleActions);
 
+        /// <summary>
+        /// Gets or sets the current declaration source.
+        /// </summary>
+        internal string CurrentDeclarationSource { get; set; } = "Configuration builder";
+
+        /// <summary>
+        /// Restores the active options used by future map declarations.
+        /// </summary>
+        /// <param name="options">The options to copy.</param>
+        internal void ResetOptions(OctoMapOptions options)
+            => _options.CopyFrom(options);
+
         /// <inheritdoc/>
         public IMapExpression<TSource, TDestination> CreateMap<TSource, TDestination>()
         {
-            var map = GetOrCreateMap(typeof(TSource), typeof(TDestination));
+            var map = GetOrCreateMap(typeof(TSource), typeof(TDestination), GetCurrentDeclaration());
             return new MapExpression<TSource, TDestination>(map, this);
         }
 
         /// <inheritdoc/>
         public void CreateMap(Type sourceType, Type destinationType)
         {
-            GetOrCreateMap(sourceType, destinationType);
+            GetOrCreateMap(sourceType, destinationType, GetCurrentDeclaration());
         }
 
         /// <inheritdoc/>
@@ -107,14 +119,38 @@ namespace OctoMap.Configuration
         /// <param name="destinationType">The destination type.</param>
         /// <returns>The configured type map.</returns>
         internal TypeMap GetOrCreateMap(Type sourceType, Type destinationType)
+            => GetOrCreateMap(sourceType, destinationType, GetCurrentDeclaration());
+
+        /// <summary>
+        /// Gets or creates a configured type map.
+        /// </summary>
+        /// <param name="sourceType">The source type.</param>
+        /// <param name="destinationType">The destination type.</param>
+        /// <param name="declaration">The map declaration.</param>
+        /// <returns>The configured type map.</returns>
+        internal TypeMap GetOrCreateMap(Type sourceType, Type destinationType, MapDeclaration declaration)
         {
             var key = new MapKey(sourceType, destinationType);
-            if (!_maps.TryGetValue(key, out var map))
+            if (_maps.TryGetValue(key, out var existingMap))
             {
-                map = new TypeMap(sourceType, destinationType, false);
-                _maps[key] = map;
+                if (_options.DuplicateMapPolicy == DuplicateMapPolicy.Throw)
+                {
+                    throw new InvalidOperationException($"Duplicate map '{sourceType.FullName}->{destinationType.FullName}' was declared by '{declaration.Source}'. Existing declaration: '{existingMap.Declaration.Source}'.");
+                }
+
+                if (_options.DuplicateMapPolicy == DuplicateMapPolicy.Replace)
+                {
+                    var replacement = new TypeMap(sourceType, destinationType, false, _options, declaration);
+                    _maps[key] = replacement;
+                    return replacement;
+                }
+
+                existingMap.SetDeclaration(declaration);
+                return existingMap;
             }
 
+            var map = new TypeMap(sourceType, destinationType, false, _options, declaration);
+            _maps[key] = map;
             return map;
         }
 
@@ -163,6 +199,7 @@ namespace OctoMap.Configuration
             => new OctoMapConfiguration(
                 Maps,
                 MultiMaps,
+                Array.Empty<string>(),
                 new OctoMapValidator(TypeConversions, _options),
                 new ConventionMappingPlanBuilder(_options, TypeConversions),
                 new ConventionMappingPlanDescriber());
@@ -184,6 +221,9 @@ namespace OctoMap.Configuration
                 target.Add(value);
             }
         }
+
+        private MapDeclaration GetCurrentDeclaration()
+            => new(CurrentDeclarationSource);
 
         private IReadOnlyDictionary<MapKey, MultiSourceTypeMap> BuildMultiMaps()
         {

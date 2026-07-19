@@ -58,6 +58,7 @@ namespace OctoMap.Samples.Basic
 
             var planDescription = _configuration.DescribeMap<Customer, CustomerDto>().Split(Environment.NewLine)[0];
             Console.WriteLine($"Plan description: {planDescription}");
+            Console.WriteLine($"Configuration diagnostics: {_configuration.GetProfiles().Count} profile loaded");
 
             var customerRecordDto = _mapper.Map<Customer, CustomerRecordDto>(customer);
             Console.WriteLine($"Constructor map: {customerRecordDto.Id} - {customerRecordDto.FullName}");

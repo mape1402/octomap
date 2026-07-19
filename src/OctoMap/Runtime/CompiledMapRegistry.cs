@@ -104,7 +104,7 @@ namespace OctoMap.Runtime
                 throw new InvalidOperationException($"Map '{sourceType.FullName}->{destinationType.FullName}' is not configured and runtime implicit maps are disabled.");
             }
 
-            return new TypeMap(sourceType, destinationType, true);
+            return new TypeMap(sourceType, destinationType, true, _options, new MapDeclaration("Runtime implicit map"));
         }
     }
 }
