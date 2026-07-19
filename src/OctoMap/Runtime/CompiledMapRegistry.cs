@@ -54,6 +54,21 @@ namespace OctoMap.Runtime
             return _compiledMaps.GetOrAdd(key, _ => Compile(sourceTypes, destinationType));
         }
 
+        /// <inheritdoc/>
+        public void CompileConfiguredMaps()
+        {
+            foreach (var map in _configuration.GetConfiguredMaps())
+            {
+                if (map.SourceTypes.Count == 1)
+                {
+                    GetOrAdd(map.SourceTypes[0], map.DestinationType);
+                    continue;
+                }
+
+                GetOrAdd(map.SourceTypes, map.DestinationType);
+            }
+        }
+
         private CompiledMap Compile(Type sourceType, Type destinationType)
         {
             var typeMap = _configuration.FindMap(sourceType, destinationType)

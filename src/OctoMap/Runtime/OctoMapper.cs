@@ -81,5 +81,23 @@ namespace OctoMap
             return (TDestination)compiledMap.Invoker.Invoke(sources.Sources.Concat(new object[] { _contextFactory.Create() }).ToArray());
         }
 
+        /// <inheritdoc/>
+        public void CompileMap<TSource, TDestination>()
+            => _compiledMapRegistry.GetOrAdd(typeof(TSource), typeof(TDestination));
+
+        /// <inheritdoc/>
+        public void CompileMap<TDestination>(params Type[] sourceTypes)
+        {
+            if (sourceTypes == null)
+            {
+                throw new ArgumentNullException(nameof(sourceTypes));
+            }
+
+            _compiledMapRegistry.GetOrAdd(sourceTypes, typeof(TDestination));
+        }
+
+        /// <inheritdoc/>
+        public void CompileMappings()
+            => _compiledMapRegistry.CompileConfiguredMaps();
     }
 }

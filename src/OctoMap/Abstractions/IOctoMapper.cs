@@ -45,5 +45,23 @@ namespace OctoMap
         /// <returns>The mapped destination instance.</returns>
         TDestination Map<TDestination>(SourceSet sources);
 
+        /// <summary>
+        /// Compiles the specified single-source map without executing it.
+        /// </summary>
+        /// <typeparam name="TSource">The source type.</typeparam>
+        /// <typeparam name="TDestination">The destination type.</typeparam>
+        void CompileMap<TSource, TDestination>();
+
+        /// <summary>
+        /// Compiles the specified multi-source map without executing it.
+        /// </summary>
+        /// <typeparam name="TDestination">The destination type.</typeparam>
+        /// <param name="sourceTypes">The source types.</param>
+        void CompileMap<TDestination>(params Type[] sourceTypes);
+
+        /// <summary>
+        /// Compiles all explicitly configured maps without executing them.
+        /// </summary>
+        void CompileMappings();
     }
 }

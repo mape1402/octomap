@@ -82,6 +82,12 @@ namespace OctoMap
         string DescribeConfiguration();
 
         /// <summary>
+        /// Gets descriptors for all explicitly configured maps.
+        /// </summary>
+        /// <returns>The configured map descriptors.</returns>
+        IReadOnlyList<ConfiguredMapDescriptor> GetConfiguredMaps();
+
+        /// <summary>
         /// Validates the current configuration.
         /// </summary>
         /// <returns>The validation report.</returns>

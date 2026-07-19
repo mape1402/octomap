@@ -22,5 +22,10 @@ namespace OctoMap.Runtime
         /// <param name="destinationType">The destination type.</param>
         /// <returns>The compiled map.</returns>
         CompiledMap GetOrAdd(IReadOnlyList<Type> sourceTypes, Type destinationType);
+
+        /// <summary>
+        /// Compiles all explicitly configured maps that are not already compiled.
+        /// </summary>
+        void CompileConfiguredMaps();
     }
 }

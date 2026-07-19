@@ -161,6 +161,21 @@ namespace OctoMap.Configuration
         }
 
         /// <inheritdoc/>
+        public IReadOnlyList<ConfiguredMapDescriptor> GetConfiguredMaps()
+            => _maps.Values
+                .Select(x => new ConfiguredMapDescriptor(
+                    new[] { x.SourceType },
+                    x.DestinationType,
+                    x.IsImplicit,
+                    x.Declaration.Source))
+                .Concat(_multiMaps.Values.Select(x => new ConfiguredMapDescriptor(
+                    x.SourceTypes,
+                    x.DestinationType,
+                    x.IsImplicit,
+                    "Multi-source map")))
+                .ToArray();
+
+        /// <inheritdoc/>
         public OctoMapValidationReport Validate()
             => _validator.Validate(_maps.Values.Cast<ITypeMap>().Concat(_multiMaps.Values).ToArray());
 
