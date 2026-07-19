@@ -1,4 +1,5 @@
 using OctoMap.Samples.Basic.Models;
+using OctoMap.Naming;
 
 namespace OctoMap.Samples.Basic
 {
@@ -10,6 +11,9 @@ namespace OctoMap.Samples.Basic
         /// <inheritdoc/>
         public override void Configure(IOctoMapConfigurationBuilder builder)
         {
+            builder.UseSourceNamingConvention(SnakeCaseNamingConvention.Instance);
+            builder.UseDestinationNamingConvention(PascalCaseNamingConvention.Instance);
+
             builder.CreateConverter<string, SkuCode>(x => new SkuCode(x.ToUpperInvariant()));
             builder.CreateConverter<SkuCode, string>(x => x.Value);
 
@@ -27,6 +31,8 @@ namespace OctoMap.Samples.Basic
                 .ReverseMap();
 
             builder.CreateMap<Product, ProductCodeDto>();
+
+            builder.CreateMap<LegacyOrder, LegacyOrderDto>();
 
             builder.CreateMap<OrderItem, OrderItemDto>()
                 .ForMember(x => x.Label, x => x.MapFrom(s => s.Sku + " x " + s.Quantity));

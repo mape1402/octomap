@@ -80,6 +80,14 @@ namespace OctoMap.Samples.Basic
 
             Console.WriteLine($"Global type converter map: {productCodeDto.Sku.Value}");
 
+            var legacyOrderDto = _mapper.Map<LegacyOrder, LegacyOrderDto>(new LegacyOrder
+            {
+                customer_name = "Legacy Ada",
+                order_total = 88.50m
+            });
+
+            Console.WriteLine($"Naming convention map: {legacyOrderDto.CustomerName} - {legacyOrderDto.OrderTotal}");
+
             var projectedProduct = new[]
             {
                 new Product

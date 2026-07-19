@@ -11,14 +11,17 @@ namespace OctoMap.Validation
     internal sealed class OctoMapValidator : IOctoMapValidator
     {
         private readonly ITypeConversionRegistry _typeConversions;
+        private readonly OctoMapOptions _options;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="OctoMapValidator"/> class.
         /// </summary>
         /// <param name="typeConversions">The type conversion registry.</param>
-        public OctoMapValidator(ITypeConversionRegistry typeConversions)
+        /// <param name="options">The OctoMap options.</param>
+        public OctoMapValidator(ITypeConversionRegistry typeConversions, OctoMapOptions options = null)
         {
             _typeConversions = typeConversions ?? throw new ArgumentNullException(nameof(typeConversions));
+            _options = options ?? new OctoMapOptions();
         }
 
         /// <inheritdoc/>
@@ -517,10 +520,7 @@ namespace OctoMap.Validation
 
         private bool CanResolveConventionConstructor(TypeMap map)
         {
-            var sourceProperties = map.SourceType
-                .GetProperties(BindingFlags.Instance | BindingFlags.Public)
-                .Where(x => x.CanRead && x.GetMethod != null)
-                .ToDictionary(x => x.Name, StringComparer.OrdinalIgnoreCase);
+            var sourceProperties = BuildSourcePropertyIndex(map.SourceType);
 
             return map.DestinationType
                 .GetConstructors(BindingFlags.Instance | BindingFlags.Public)
@@ -531,7 +531,7 @@ namespace OctoMap.Validation
                     var parameters = constructor.GetParameters();
                     return parameters.Length > 0
                         && parameters.All(parameter =>
-                            sourceProperties.TryGetValue(parameter.Name, out var sourceProperty)
+                            sourceProperties.TryGetValue(GetDestinationMemberKey(parameter.Name), out var sourceProperty)
                             && (parameter.ParameterType.IsAssignableFrom(sourceProperty.PropertyType)
                                 || _typeConversions.TryFind(sourceProperty.PropertyType, parameter.ParameterType, out _)));
                 });
@@ -624,12 +624,67 @@ namespace OctoMap.Validation
         private static bool CanWrite(PropertyInfo property)
             => property.CanWrite && property.SetMethod != null && property.SetMethod.IsPublic;
 
+        private IReadOnlyDictionary<string, PropertyInfo> BuildSourcePropertyIndex(Type sourceType)
+        {
+            var sourceProperties = new Dictionary<string, PropertyInfo>(StringComparer.OrdinalIgnoreCase);
+            foreach (var property in sourceType
+                .GetProperties(BindingFlags.Instance | BindingFlags.Public)
+                .Where(x => x.CanRead && x.GetMethod != null))
+            {
+                var key = GetSourceMemberKey(property.Name);
+                if (sourceProperties.ContainsKey(key))
+                {
+                    continue;
+                }
+
+                sourceProperties[key] = property;
+            }
+
+            return sourceProperties;
+        }
+
+        private string GetSourceMemberKey(string memberName)
+            => _options.SourceNamingConvention.Normalize(ApplyAffixes(
+                memberName,
+                _options.SourceMemberPrefixes,
+                _options.SourceMemberSuffixes));
+
+        private string GetDestinationMemberKey(string memberName)
+            => _options.DestinationNamingConvention.Normalize(ApplyAffixes(
+                memberName,
+                _options.DestinationMemberPrefixes,
+                _options.DestinationMemberSuffixes));
+
+        private static string ApplyAffixes(
+            string memberName,
+            IEnumerable<string> prefixes,
+            IEnumerable<string> suffixes)
+        {
+            var name = memberName ?? string.Empty;
+            foreach (var prefix in prefixes ?? Array.Empty<string>())
+            {
+                if (name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    name = name[prefix.Length..];
+                    break;
+                }
+            }
+
+            foreach (var suffix in suffixes ?? Array.Empty<string>())
+            {
+                if (name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                {
+                    name = name[..^suffix.Length];
+                    break;
+                }
+            }
+
+            return name;
+        }
+
         private void ValidateConventionMemberConversions(TypeMap map, List<OctoMapValidationIssue> issues)
         {
-            var sourceProperties = map.SourceType
-                .GetProperties(BindingFlags.Instance | BindingFlags.Public)
-                .Where(x => x.CanRead && x.GetMethod != null)
-                .ToDictionary(x => x.Name, StringComparer.OrdinalIgnoreCase);
+            var sourceProperties = BuildSourcePropertyIndex(map.SourceType);
             var configuredMembers = map.MemberMaps.Values
                 .Where(x => !x.UsesDestinationPath)
                 .ToDictionary(x => x.DestinationProperty.Name, StringComparer.OrdinalIgnoreCase);
@@ -637,7 +692,7 @@ namespace OctoMap.Validation
             foreach (var destinationProperty in map.DestinationType.GetProperties(BindingFlags.Instance | BindingFlags.Public).Where(CanWrite))
             {
                 if (configuredMembers.ContainsKey(destinationProperty.Name)
-                    || !sourceProperties.TryGetValue(destinationProperty.Name, out var sourceProperty)
+                    || !sourceProperties.TryGetValue(GetDestinationMemberKey(destinationProperty.Name), out var sourceProperty)
                     || destinationProperty.PropertyType.IsAssignableFrom(sourceProperty.PropertyType)
                     || CanUseNestedMap(sourceProperty.PropertyType, destinationProperty.PropertyType)
                     || _typeConversions.TryFind(sourceProperty.PropertyType, destinationProperty.PropertyType, out _))

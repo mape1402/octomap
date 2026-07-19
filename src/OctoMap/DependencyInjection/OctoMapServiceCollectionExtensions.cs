@@ -50,7 +50,7 @@ namespace OctoMap
             configureOptions?.Invoke(options);
 
             var discovery = new OctoMapProfileDiscovery();
-            var configurationBuilder = BuildConfigurationBuilder(discovery.Discover(profileAssemblies), profileAssemblies);
+            var configurationBuilder = BuildConfigurationBuilder(options, discovery.Discover(profileAssemblies), profileAssemblies);
             var maps = configurationBuilder.Maps;
             var multiMaps = configurationBuilder.MultiMaps;
             var typeConversions = configurationBuilder.TypeConversions;
@@ -59,7 +59,9 @@ namespace OctoMap
             services.AddSingleton(options);
             services.AddSingleton<IOctoMapProfileDiscovery, OctoMapProfileDiscovery>();
             services.AddSingleton(typeConversions);
-            services.AddSingleton<IOctoMapValidator>(sp => new OctoMapValidator(sp.GetRequiredService<ITypeConversionRegistry>()));
+            services.AddSingleton<IOctoMapValidator>(sp => new OctoMapValidator(
+                sp.GetRequiredService<ITypeConversionRegistry>(),
+                sp.GetRequiredService<OctoMapOptions>()));
             services.AddSingleton<IMappingPlanBuilder, ConventionMappingPlanBuilder>();
             services.TryAddSingleton<IMappingPlanDescriber, ConventionMappingPlanDescriber>();
             services.AddSingleton(sp => new OctoMapConfiguration(
@@ -82,10 +84,11 @@ namespace OctoMap
         }
 
         private static OctoMapConfigurationBuilder BuildConfigurationBuilder(
+            OctoMapOptions options,
             IReadOnlyCollection<OctoMapProfile> profiles,
             IReadOnlyCollection<Assembly> profileAssemblies)
         {
-            var builder = new OctoMapConfigurationBuilder();
+            var builder = new OctoMapConfigurationBuilder(options);
             foreach (var profile in profiles)
             {
                 profile.Configure(builder);

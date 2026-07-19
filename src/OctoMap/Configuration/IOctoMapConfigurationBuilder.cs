@@ -43,5 +43,41 @@ namespace OctoMap
         /// <typeparam name="TDestination">The destination type.</typeparam>
         void CreateConverter<TConverter, TSource, TDestination>()
             where TConverter : IValueConverter<TSource, TDestination>;
+
+        /// <summary>
+        /// Configures the source member naming convention for convention maps.
+        /// </summary>
+        /// <param name="namingConvention">The source naming convention.</param>
+        void UseSourceNamingConvention(OctoMap.Naming.INamingConvention namingConvention);
+
+        /// <summary>
+        /// Configures the destination member naming convention for convention maps.
+        /// </summary>
+        /// <param name="namingConvention">The destination naming convention.</param>
+        void UseDestinationNamingConvention(OctoMap.Naming.INamingConvention namingConvention);
+
+        /// <summary>
+        /// Removes source member prefixes before naming convention normalization.
+        /// </summary>
+        /// <param name="prefixes">The prefixes to remove.</param>
+        void RecognizeSourcePrefixes(params string[] prefixes);
+
+        /// <summary>
+        /// Removes source member suffixes before naming convention normalization.
+        /// </summary>
+        /// <param name="suffixes">The suffixes to remove.</param>
+        void RecognizeSourceSuffixes(params string[] suffixes);
+
+        /// <summary>
+        /// Removes destination member prefixes before naming convention normalization.
+        /// </summary>
+        /// <param name="prefixes">The prefixes to remove.</param>
+        void RecognizeDestinationPrefixes(params string[] prefixes);
+
+        /// <summary>
+        /// Removes destination member suffixes before naming convention normalization.
+        /// </summary>
+        /// <param name="suffixes">The suffixes to remove.</param>
+        void RecognizeDestinationSuffixes(params string[] suffixes);
     }
 }

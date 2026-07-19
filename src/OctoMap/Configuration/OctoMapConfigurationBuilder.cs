@@ -13,8 +13,18 @@ namespace OctoMap.Configuration
         private readonly Dictionary<MapKey, TypeMap> _maps = new();
         private readonly Dictionary<MapKey, TypeConversionMap> _conversions = new();
         private readonly List<MultiSourceTypeMap> _multiMaps = new();
+        private readonly OctoMapOptions _options;
         private readonly Dictionary<int, Action<object, object, IMapContext>> _inlineLifecycleActions = new();
         private int _inlineLifecycleActionId;
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="OctoMapConfigurationBuilder"/> class.
+        /// </summary>
+        /// <param name="options">The configuration options.</param>
+        public OctoMapConfigurationBuilder(OctoMapOptions options = null)
+        {
+            _options = options ?? new OctoMapOptions();
+        }
 
         /// <summary>
         /// Gets the configured single-source maps.
@@ -65,6 +75,30 @@ namespace OctoMap.Configuration
         public void CreateConverter<TConverter, TSource, TDestination>()
             where TConverter : IValueConverter<TSource, TDestination>
             => AddConversion(new TypeConversionMap(typeof(TSource), typeof(TDestination), null, typeof(TConverter)));
+
+        /// <inheritdoc/>
+        public void UseSourceNamingConvention(OctoMap.Naming.INamingConvention namingConvention)
+            => _options.SourceNamingConvention = namingConvention ?? throw new ArgumentNullException(nameof(namingConvention));
+
+        /// <inheritdoc/>
+        public void UseDestinationNamingConvention(OctoMap.Naming.INamingConvention namingConvention)
+            => _options.DestinationNamingConvention = namingConvention ?? throw new ArgumentNullException(nameof(namingConvention));
+
+        /// <inheritdoc/>
+        public void RecognizeSourcePrefixes(params string[] prefixes)
+            => AddAffixes(_options.SourceMemberPrefixes, prefixes);
+
+        /// <inheritdoc/>
+        public void RecognizeSourceSuffixes(params string[] suffixes)
+            => AddAffixes(_options.SourceMemberSuffixes, suffixes);
+
+        /// <inheritdoc/>
+        public void RecognizeDestinationPrefixes(params string[] prefixes)
+            => AddAffixes(_options.DestinationMemberPrefixes, prefixes);
+
+        /// <inheritdoc/>
+        public void RecognizeDestinationSuffixes(params string[] suffixes)
+            => AddAffixes(_options.DestinationMemberSuffixes, suffixes);
 
         /// <summary>
         /// Gets or creates a configured type map.
@@ -129,13 +163,26 @@ namespace OctoMap.Configuration
             => new OctoMapConfiguration(
                 Maps,
                 MultiMaps,
-                new OctoMapValidator(TypeConversions),
-                new ConventionMappingPlanBuilder(new OctoMapOptions(), TypeConversions),
+                new OctoMapValidator(TypeConversions, _options),
+                new ConventionMappingPlanBuilder(_options, TypeConversions),
                 new ConventionMappingPlanDescriber());
 
         private void AddConversion(TypeConversionMap conversion)
         {
             _conversions[new MapKey(conversion.SourceType, conversion.DestinationType)] = conversion;
+        }
+
+        private static void AddAffixes(ICollection<string> target, IEnumerable<string> values)
+        {
+            if (values == null)
+            {
+                return;
+            }
+
+            foreach (var value in values.Where(x => !string.IsNullOrWhiteSpace(x)))
+            {
+                target.Add(value);
+            }
         }
 
         private IReadOnlyDictionary<MapKey, MultiSourceTypeMap> BuildMultiMaps()

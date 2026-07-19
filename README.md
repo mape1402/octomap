@@ -20,6 +20,7 @@ OctoMap is designed for applications that want AutoMapper-style configuration, b
 - Supports first-pass base map inclusion and polymorphic map lookup.
 - Supports first-pass open generic map registration.
 - Supports attribute-based map registration and member configuration.
+- Supports configurable member naming conventions.
 - Uses DynaBee-generated method bodies and invokers for hot execution paths.
 - Integrates with `Microsoft.Extensions.DependencyInjection`.
 
@@ -366,6 +367,59 @@ public sealed class ProductDto
 ```
 
 Runtime implicit maps are single-source only. Multi-source maps must be configured explicitly.
+
+## Naming Conventions
+
+Naming conventions let convention maps match members that use different casing or separators.
+
+```csharp
+services.AddOctoMap(options =>
+{
+    options.SourceNamingConvention = SnakeCaseNamingConvention.Instance;
+    options.DestinationNamingConvention = PascalCaseNamingConvention.Instance;
+}, typeof(SalesProfile).Assembly);
+```
+
+The same configuration can be declared from a profile:
+
+```csharp
+public sealed class SalesProfile : OctoMapProfile
+{
+    public override void Configure(IOctoMapConfigurationBuilder builder)
+    {
+        builder.UseSourceNamingConvention(SnakeCaseNamingConvention.Instance);
+        builder.UseDestinationNamingConvention(PascalCaseNamingConvention.Instance);
+
+        builder.CreateMap<LegacyOrder, LegacyOrderDto>();
+    }
+}
+```
+
+This maps:
+
+```text
+customer_name -> CustomerName
+order_total   -> OrderTotal
+```
+
+Supported built-in conventions:
+
+- `ExactNamingConvention`
+- `PascalCaseNamingConvention`
+- `CamelCaseNamingConvention`
+- `SnakeCaseNamingConvention`
+- `KebabCaseNamingConvention`
+
+`ExactNamingConvention` is the default, so existing maps keep the previous exact-name behavior. You can also remove simple source prefixes or destination suffixes before matching:
+
+```csharp
+builder.RecognizeSourcePrefixes("m_");
+builder.RecognizeSourceSuffixes("_field");
+builder.RecognizeDestinationPrefixes("View");
+builder.RecognizeDestinationSuffixes("Dto");
+```
+
+Naming conventions are used by convention member matching, convention constructor mapping, and flattening. Explicit configuration through `ForMember(...)`, `ForPath(...)`, attributes, resolvers, and converters still wins.
 
 ## Reverse Mapping
 
@@ -876,6 +930,7 @@ Constructor map: 100 - Grace Hopper
 Implicit map: OCTO-001 - 49.95
 Reverse map: OCTO-001 - 49.95
 Global type converter map: OCTO-CODE
+Naming convention map: Legacy Ada - 88.50
 Projection map: OCTO-PROJ - 19.95
 EF SQLite projection map: OCTO-SQLITE - 29.95
 Resolver, value converter, nested map, collection map, flattening: 700 - NEW - No description - Order #0700 is Created - 149.99 USD - Katherine Johnson - Katherine - 2 items - 2 converted tags
@@ -904,7 +959,7 @@ dotnet run -c Release -f net8.0 --project benchmarks/OctoMap.Benchmarks/OctoMap.
 
 ## Current Status
 
-OctoMap is in early alpha. The core runtime path, explicit maps, runtime implicit single-source maps, interface-based map registration, attribute-based registration, explicit multi-source maps, nested mapping, collection mapping, collection element conversion, DI resolvers, value converters, lifecycle actions, conditional mapping, inheritance map inclusion, open generic map resolution, validation, first-pass projection mapping, first-pass plan diagnostics, tests, sample project, and DynaBee-backed generation are implemented.
+OctoMap is in early alpha. The core runtime path, explicit maps, runtime implicit single-source maps, naming conventions, interface-based map registration, attribute-based registration, explicit multi-source maps, nested mapping, collection mapping, collection element conversion, DI resolvers, value converters, lifecycle actions, conditional mapping, inheritance map inclusion, open generic map resolution, validation, first-pass projection mapping, first-pass plan diagnostics, tests, sample project, and DynaBee-backed generation are implemented.
 
 Upcoming areas include:
 

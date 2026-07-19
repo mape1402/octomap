@@ -35,10 +35,7 @@ namespace OctoMap.Planning
                 return BuildMultiSource(multiSourceTypeMap);
             }
 
-            var sourceProperties = typeMap.SourceType
-                .GetProperties(BindingFlags.Instance | BindingFlags.Public)
-                .Where(x => x.CanRead && x.GetMethod != null)
-                .ToDictionary(x => x.Name, StringComparer.OrdinalIgnoreCase);
+            var sourceProperties = BuildSourcePropertyIndex(typeMap.SourceType);
 
             var explicitMemberMaps = typeMap is TypeMap configuredTypeMap
                 ? configuredTypeMap.MemberMaps
@@ -108,7 +105,7 @@ namespace OctoMap.Planning
                     }
                 }
 
-                if (!sourceProperties.TryGetValue(destinationProperty.Name, out var sourceProperty))
+                if (!sourceProperties.TryGetValue(GetDestinationMemberKey(destinationProperty.Name), out var sourceProperty))
                 {
                     if (TryCreateFlattenedAssignment(destinationProperty, sourceProperties, out var flattenedAssignment))
                     {
@@ -188,6 +185,64 @@ namespace OctoMap.Planning
 
         private static bool CanWrite(PropertyInfo property)
             => property.CanWrite && property.SetMethod != null && property.SetMethod.IsPublic;
+
+        private IReadOnlyDictionary<string, PropertyInfo> BuildSourcePropertyIndex(Type sourceType)
+        {
+            var sourceProperties = new Dictionary<string, PropertyInfo>(StringComparer.OrdinalIgnoreCase);
+            foreach (var property in sourceType
+                .GetProperties(BindingFlags.Instance | BindingFlags.Public)
+                .Where(x => x.CanRead && x.GetMethod != null))
+            {
+                var key = GetSourceMemberKey(property.Name);
+                if (sourceProperties.TryGetValue(key, out var existingProperty))
+                {
+                    throw new InvalidOperationException($"Source type '{sourceType.FullName}' has ambiguous members '{existingProperty.Name}' and '{property.Name}' for normalized member name '{key}'. Configure one member explicitly with ForMember.");
+                }
+
+                sourceProperties[key] = property;
+            }
+
+            return sourceProperties;
+        }
+
+        private string GetSourceMemberKey(string memberName)
+            => _options.SourceNamingConvention.Normalize(ApplyAffixes(
+                memberName,
+                _options.SourceMemberPrefixes,
+                _options.SourceMemberSuffixes));
+
+        private string GetDestinationMemberKey(string memberName)
+            => _options.DestinationNamingConvention.Normalize(ApplyAffixes(
+                memberName,
+                _options.DestinationMemberPrefixes,
+                _options.DestinationMemberSuffixes));
+
+        private static string ApplyAffixes(
+            string memberName,
+            IEnumerable<string> prefixes,
+            IEnumerable<string> suffixes)
+        {
+            var name = memberName ?? string.Empty;
+            foreach (var prefix in prefixes ?? Array.Empty<string>())
+            {
+                if (name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    name = name[prefix.Length..];
+                    break;
+                }
+            }
+
+            foreach (var suffix in suffixes ?? Array.Empty<string>())
+            {
+                if (name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                {
+                    name = name[..^suffix.Length];
+                    break;
+                }
+            }
+
+            return name;
+        }
 
         private MemberAssignmentPlan CreateAssignment(
             PropertyInfo destinationProperty,
@@ -444,7 +499,7 @@ namespace OctoMap.Planning
                 var canUseConstructor = true;
                 foreach (var parameter in parameters)
                 {
-                    if (!sourceProperties.TryGetValue(parameter.Name, out var sourceProperty))
+                    if (!sourceProperties.TryGetValue(GetDestinationMemberKey(parameter.Name), out var sourceProperty))
                     {
                         canUseConstructor = false;
                         break;
@@ -562,7 +617,7 @@ namespace OctoMap.Planning
             out MemberAssignmentPlan assignment)
         {
             assignment = null;
-            if (!TryResolveSourcePath(destinationProperty.Name, sourceProperties.Values, out var sourcePath))
+            if (!TryResolveSourcePath(GetDestinationMemberKey(destinationProperty.Name), sourceProperties.Values, out var sourcePath))
             {
                 return false;
             }
@@ -602,22 +657,23 @@ namespace OctoMap.Planning
             return true;
         }
 
-        private static bool TryResolveSourcePath(
-            string destinationName,
+        private bool TryResolveSourcePath(
+            string destinationKey,
             IEnumerable<PropertyInfo> sourceProperties,
             out IReadOnlyList<PropertyInfo> sourcePath)
         {
             foreach (var sourceProperty in sourceProperties
                 .Where(x => IsFlattenableSourceType(x.PropertyType))
-                .OrderByDescending(x => x.Name.Length)
+                .OrderByDescending(x => GetSourceMemberKey(x.Name).Length)
                 .ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase))
             {
-                if (!destinationName.StartsWith(sourceProperty.Name, StringComparison.OrdinalIgnoreCase))
+                var sourceKey = GetSourceMemberKey(sourceProperty.Name);
+                if (!destinationKey.StartsWith(sourceKey, StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
                 }
 
-                var remainingName = destinationName[sourceProperty.Name.Length..];
+                var remainingName = destinationKey[sourceKey.Length..];
                 if (string.IsNullOrWhiteSpace(remainingName))
                 {
                     continue;
@@ -634,7 +690,7 @@ namespace OctoMap.Planning
             return false;
         }
 
-        private static bool TryResolveSourcePath(string destinationName, Type sourceType, out IReadOnlyList<PropertyInfo> sourcePath)
+        private bool TryResolveSourcePath(string destinationKey, Type sourceType, out IReadOnlyList<PropertyInfo> sourcePath)
         {
             var sourceProperties = sourceType
                 .GetProperties(BindingFlags.Instance | BindingFlags.Public)
@@ -642,14 +698,14 @@ namespace OctoMap.Planning
                 .ToArray();
 
             var directProperty = sourceProperties
-                .FirstOrDefault(x => string.Equals(x.Name, destinationName, StringComparison.OrdinalIgnoreCase));
+                .FirstOrDefault(x => string.Equals(GetSourceMemberKey(x.Name), destinationKey, StringComparison.OrdinalIgnoreCase));
             if (directProperty != null)
             {
                 sourcePath = new[] { directProperty };
                 return true;
             }
 
-            return TryResolveSourcePath(destinationName, sourceProperties, out sourcePath);
+            return TryResolveSourcePath(destinationKey, sourceProperties, out sourcePath);
         }
 
         private static bool IsFlattenableSourceType(Type type)
