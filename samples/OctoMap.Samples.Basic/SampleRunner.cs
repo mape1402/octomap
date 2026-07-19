@@ -158,7 +158,24 @@ namespace OctoMap.Samples.Basic
                 Code = "WH-42"
             });
 
-            Console.WriteLine($"Interface map: {registeredByInterface.Code}");
+            Console.WriteLine($"IMapFrom interface map: {registeredByInterface.Code}");
+
+            var registeredByMapToInterface = _mapper.Map<ShipmentEvent, ShipmentEventDto>(new ShipmentEvent
+            {
+                Code = "SHIP",
+                Location = "Dock 7"
+            });
+
+            Console.WriteLine($"IMapTo interface map: {registeredByMapToInterface.Code} - {registeredByMapToInterface.Location}");
+
+            var attributedOrderDto = _mapper.Map<AttributedOrder, AttributedOrderDto>(new AttributedOrder
+            {
+                StatusCode = "ATTR",
+                Description = null,
+                InternalCode = "hidden"
+            });
+
+            Console.WriteLine($"Attribute map: {attributedOrderDto.Status} - {attributedOrderDto.Description} - internal '{attributedOrderDto.InternalCode ?? "ignored"}'");
 
             var summary = _mapper.Map<OrderSummaryDto>(SourceSet.Of(
                 new Order

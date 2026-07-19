@@ -13,8 +13,13 @@ OctoMap is designed for applications that want AutoMapper-style configuration, b
 - Supports interface-based registration through `IMapFrom<T>` and `IMapTo<T>`.
 - Supports explicit multi-source maps into one destination.
 - Supports nested object mapping.
-- Supports array, `List<T>`, and common collection interface member mapping.
+- Supports arrays, `List<T>`, `HashSet<T>`, sets, and common collection interface member mapping.
+- Supports collection element conversion and first-pass collection projection.
 - Supports DI-based value resolvers and value converters.
+- Supports runtime lifecycle actions.
+- Supports first-pass base map inclusion and polymorphic map lookup.
+- Supports first-pass open generic map registration.
+- Supports attribute-based map registration and member configuration.
 - Uses DynaBee-generated method bodies and invokers for hot execution paths.
 - Integrates with `Microsoft.Extensions.DependencyInjection`.
 
@@ -381,6 +386,88 @@ builder.CreateMap<Customer, CustomerDto>()
 
 This can map `CustomerDto.DisplayName` back to `Customer.Name`. Reverse mapping does not currently reverse resolvers, converters, flattening, unflattening, complex expressions, or multi-source maps.
 
+`ReverseMap()` can also reverse explicit `ForPath(...)` unflattening when the original source is a direct property.
+
+```csharp
+builder.CreateMap<OrderDto, Order>()
+    .ForPath(x => x.Customer.FirstName, x => x.MapFrom(s => s.CustomerFirstName))
+    .ReverseMap();
+```
+
+This maps `Order.Customer.FirstName` back to `OrderDto.CustomerFirstName`.
+
+## Lifecycle Actions
+
+Lifecycle actions run only in runtime mapping. They are not projectable because LINQ providers cannot translate service calls or arbitrary callbacks.
+
+Use inline actions for local behavior:
+
+```csharp
+builder.CreateMap<Order, OrderDto>()
+    .BeforeMap((source, destination, context) => destination.Status = "mapping")
+    .AfterMap((source, destination, context) => destination.Status = destination.Status.Trim());
+```
+
+Use DI-backed actions when behavior needs services:
+
+```csharp
+public sealed class OrderAuditAction : IMappingAction<Order, OrderDto>
+{
+    private readonly IAuditLog _auditLog;
+
+    public OrderAuditAction(IAuditLog auditLog)
+    {
+        _auditLog = auditLog;
+    }
+
+    public void Process(Order source, OrderDto destination, IMapContext context)
+        => _auditLog.WriteMappedOrder(source.Id);
+}
+
+builder.CreateMap<Order, OrderDto>()
+    .AfterMap<OrderAuditAction>();
+```
+
+Register DI-backed actions and their dependencies in the application service provider. OctoMap resolves action services on each map call, so scoped, transient, and singleton lifetimes remain controlled by DI.
+
+## Inheritance and Polymorphism
+
+`IncludeBase<TBaseSource, TBaseDestination>()` copies explicit member configuration from a configured base map into a derived map.
+
+```csharp
+builder.CreateMap<BaseOrder, BaseOrderDto>()
+    .ForMember(x => x.StatusLabel, x => x.MapFrom(s => s.StatusCode.ToUpperInvariant()));
+
+builder.CreateMap<OnlineOrder, OnlineOrderDto>()
+    .IncludeBase<BaseOrder, BaseOrderDto>();
+```
+
+OctoMap can also resolve a configured base map when the runtime source type is derived and the requested destination is compatible with the configured base destination.
+
+```csharp
+BaseOrder source = new OnlineOrder { StatusCode = "ready" };
+var dto = mapper.Map<BaseOrderDto>(source);
+```
+
+This is a first pass. Ambiguous inheritance maps should still be configured explicitly.
+
+## Open Generic Maps
+
+Open generic maps can be registered with the non-generic `CreateMap(...)` API.
+
+```csharp
+builder.CreateMap(typeof(Box<>), typeof(BoxDto<>));
+builder.CreateMap(typeof(Page<>), typeof(PageDto<>));
+```
+
+OctoMap closes the map lazily when a closed generic pair is requested.
+
+```csharp
+var dto = mapper.Map<Box<Customer>, BoxDto<CustomerDto>>(box);
+```
+
+The closed generic map then uses the same runtime planning, validation, nested mapping, collection mapping, and cache behavior as a normal map.
+
 ## Projection Mapping
 
 OctoMap can build LINQ projection expressions for query providers such as Entity Framework.
@@ -402,14 +489,17 @@ The first projection pass supports:
 - null substitutes
 - convention flattening
 - constructor projection for records and immutable DTOs
+- collection projection for assignable elements and expression-based element conversions
 
 Runtime-only features are rejected with clear errors:
 
 - DI resolvers
 - DI value converters
+- DI collection element converters
 - conditional mapping
 - nested runtime mapping
-- collection runtime mapping
+- nested collection element runtime mapping
+- lifecycle actions
 - multi-source maps
 
 ## Constructor Mapping
@@ -516,11 +606,14 @@ Supported destination shapes:
 
 - `T[]`
 - `List<T>`
+- `HashSet<T>`
 - `IEnumerable<T>`
 - `ICollection<T>`
 - `IReadOnlyCollection<T>`
 - `IList<T>`
 - `IReadOnlyList<T>`
+- `ISet<T>`
+- `IReadOnlySet<T>`
 
 Example:
 
@@ -545,7 +638,23 @@ builder.CreateMap<OrderItem, OrderItemDto>()
     .ForMember(x => x.Label, x => x.MapFrom(s => s.Sku + " x " + s.Quantity));
 ```
 
-OctoMap generates a loop through DynaBee. If the item type needs a map, OctoMap uses the cached item mapper per element. If the item type is already assignable, OctoMap copies the item value/reference.
+OctoMap generates a loop through DynaBee. If the item type needs a map, OctoMap uses the cached item mapper per element. If the item type is already assignable, OctoMap copies the item value/reference. If a global type conversion exists for the element pair, OctoMap applies that conversion per item before falling back to nested item mapping.
+
+```csharp
+builder.CreateConverter<string, SkuCode>(x => new SkuCode(x.ToUpperInvariant()));
+
+public sealed class Order
+{
+    public IEnumerable<string> Tags { get; set; }
+}
+
+public sealed class OrderDto
+{
+    public IReadOnlySet<SkuCode> Tags { get; set; }
+}
+```
+
+Expression-based element conversions can also be used by `ProjectTo(...)`. DI-based element converters are runtime-only.
 
 By default, null source collections map to null destination collections. You can map null collections to empty collections globally:
 
@@ -594,6 +703,43 @@ public sealed class Customer : IMapTo<CustomerDto>
     public string Name { get; set; }
 }
 ```
+
+## Attribute-Based Registration
+
+Attributes are convenience configuration for simple maps. Fluent configuration still wins when both configure the same destination member.
+
+Use `[MapFrom]` or `[MapTo]` to register maps during assembly scanning:
+
+```csharp
+[MapFrom(typeof(Order))]
+public sealed class OrderDto
+{
+    [MapName("StatusCode")]
+    public string Status { get; set; }
+
+    [NullSubstitute("No description")]
+    public string Description { get; set; }
+
+    [IgnoreMap]
+    public string InternalCode { get; set; }
+}
+```
+
+Use `[MapConstructor]` to prefer a constructor for constructor mapping:
+
+```csharp
+public sealed class OrderDto
+{
+    [MapConstructor]
+    public OrderDto(int id, string status)
+    {
+        Id = id;
+        Status = status;
+    }
+}
+```
+
+Attribute configuration is visible through the normal planning and diagnostics flow because attributes are converted into regular OctoMap configuration during startup.
 
 ## Explicit Multi-Source Maps
 
@@ -732,11 +878,13 @@ Reverse map: OCTO-001 - 49.95
 Global type converter map: OCTO-CODE
 Projection map: OCTO-PROJ - 19.95
 EF SQLite projection map: OCTO-SQLITE - 29.95
-Resolver, value converter, nested map, collection map, flattening: 700 - NEW - No description - Order #0700 is Created - 149.99 USD - Katherine Johnson - Katherine - 2 items
+Resolver, value converter, nested map, collection map, flattening: 700 - NEW - No description - Order #0700 is Created - 149.99 USD - Katherine Johnson - Katherine - 2 items - 2 converted tags
 ForPath map: 800 - Dorothy
 Generated expressions: OCTO-HOODIE - 109.97 - remainder 1 - can ship True
 Conditional map: skipped
-Interface map: WH-42
+IMapFrom interface map: WH-42
+IMapTo interface map: SHIP - Dock 7
+Attribute map: ATTR - No attributed description - internal 'ignored'
 Multi-source map: 701 - Ada - Priority order - Ada
 ```
 
@@ -756,13 +904,12 @@ dotnet run -c Release -f net8.0 --project benchmarks/OctoMap.Benchmarks/OctoMap.
 
 ## Current Status
 
-OctoMap is in early alpha. The core runtime path, explicit maps, runtime implicit single-source maps, interface-based map registration, explicit multi-source maps, nested mapping, collection mapping, DI resolvers, value converters, conditional mapping, validation, first-pass projection mapping, first-pass plan diagnostics, tests, sample project, and DynaBee-backed generation are implemented.
+OctoMap is in early alpha. The core runtime path, explicit maps, runtime implicit single-source maps, interface-based map registration, attribute-based registration, explicit multi-source maps, nested mapping, collection mapping, collection element conversion, DI resolvers, value converters, lifecycle actions, conditional mapping, inheritance map inclusion, open generic map resolution, validation, first-pass projection mapping, first-pass plan diagnostics, tests, sample project, and DynaBee-backed generation are implemented.
 
 Upcoming areas include:
 
 - broader expression support
 - deeper projection support
-- richer collection destination support
-- item converters for collection members
+- richer collection update and merge policies
 - richer diagnostics
 - benchmarks against manual mapping and AutoMapper
