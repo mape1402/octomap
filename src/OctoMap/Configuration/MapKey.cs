@@ -6,6 +6,7 @@ namespace OctoMap.Configuration
     internal readonly struct MapKey : IEquatable<MapKey>
     {
         private readonly Type[] _sourceTypes;
+        private readonly int _sourceCount;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="MapKey"/> struct.
@@ -13,8 +14,11 @@ namespace OctoMap.Configuration
         /// <param name="sourceType">The source type.</param>
         /// <param name="destinationType">The destination type.</param>
         public MapKey(Type sourceType, Type destinationType)
-            : this(new[] { sourceType }, destinationType)
         {
+            SourceType = sourceType ?? throw new ArgumentNullException(nameof(sourceType));
+            DestinationType = destinationType ?? throw new ArgumentNullException(nameof(destinationType));
+            _sourceTypes = null;
+            _sourceCount = 1;
         }
 
         /// <summary>
@@ -34,9 +38,22 @@ namespace OctoMap.Configuration
                 throw new ArgumentException("At least one source type is required.", nameof(sourceTypes));
             }
 
-            _sourceTypes = sourceTypes.Select(x => x ?? throw new ArgumentException("Source types cannot contain null values.", nameof(sourceTypes))).ToArray();
-            SourceType = _sourceTypes[0];
             DestinationType = destinationType ?? throw new ArgumentNullException(nameof(destinationType));
+            SourceType = sourceTypes[0] ?? throw new ArgumentException("Source types cannot contain null values.", nameof(sourceTypes));
+            _sourceCount = sourceTypes.Count;
+
+            if (sourceTypes.Count == 1)
+            {
+                _sourceTypes = null;
+                return;
+            }
+
+            _sourceTypes = new Type[sourceTypes.Count];
+            _sourceTypes[0] = SourceType;
+            for (var index = 1; index < sourceTypes.Count; index++)
+            {
+                _sourceTypes[index] = sourceTypes[index] ?? throw new ArgumentException("Source types cannot contain null values.", nameof(sourceTypes));
+            }
         }
 
         /// <summary>
@@ -47,7 +64,7 @@ namespace OctoMap.Configuration
         /// <summary>
         /// Gets the source types.
         /// </summary>
-        public IReadOnlyList<Type> SourceTypes => _sourceTypes;
+        public IReadOnlyList<Type> SourceTypes => _sourceTypes ?? new[] { SourceType };
 
         /// <summary>
         /// Gets the destination type.
@@ -56,7 +73,27 @@ namespace OctoMap.Configuration
 
         /// <inheritdoc/>
         public bool Equals(MapKey other)
-            => DestinationType == other.DestinationType && SourceTypes.SequenceEqual(other.SourceTypes);
+        {
+            if (DestinationType != other.DestinationType || _sourceCount != other._sourceCount)
+            {
+                return false;
+            }
+
+            if (_sourceCount == 1)
+            {
+                return SourceType == other.SourceType;
+            }
+
+            for (var index = 0; index < _sourceCount; index++)
+            {
+                if (_sourceTypes[index] != other._sourceTypes[index])
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
 
         /// <inheritdoc/>
         public override bool Equals(object obj)
@@ -66,9 +103,16 @@ namespace OctoMap.Configuration
         public override int GetHashCode()
         {
             var hash = new HashCode();
-            foreach (var sourceType in SourceTypes)
+            if (_sourceCount == 1)
             {
-                hash.Add(sourceType);
+                hash.Add(SourceType);
+            }
+            else
+            {
+                for (var index = 0; index < _sourceCount; index++)
+                {
+                    hash.Add(_sourceTypes[index]);
+                }
             }
 
             hash.Add(DestinationType);

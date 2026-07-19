@@ -10,7 +10,7 @@ namespace OctoMap
     /// <typeparam name="TDestination">The destination type.</typeparam>
     internal sealed class OctoMapper<TSource, TDestination> : IOctoMapper<TSource, TDestination>
     {
-        private readonly ICompiledMapRegistry _compiledMapRegistry;
+        private readonly TypedCompiledMap<TSource, TDestination> _typedMap;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="OctoMapper{TSource, TDestination}"/> class.
@@ -18,13 +18,18 @@ namespace OctoMap
         /// <param name="compiledMapRegistry">The compiled map registry.</param>
         public OctoMapper(ICompiledMapRegistry compiledMapRegistry)
         {
-            _compiledMapRegistry = compiledMapRegistry ?? throw new ArgumentNullException(nameof(compiledMapRegistry));
+            if (compiledMapRegistry == null)
+            {
+                throw new ArgumentNullException(nameof(compiledMapRegistry));
+            }
+
+            _typedMap = TypedCompiledMapCache<TSource, TDestination>.Get(compiledMapRegistry);
         }
 
         /// <inheritdoc/>
         public TDestination Map(TSource source, IMapContext context)
         {
-            var typedMap = TypedCompiledMapCache<TSource, TDestination>.Get(_compiledMapRegistry);
+            var typedMap = _typedMap;
             if (typedMap.ContextFreeMapper != null)
             {
                 return typedMap.ContextFreeMapper.MapContextFree(source);
@@ -46,7 +51,7 @@ namespace OctoMap
         /// <inheritdoc/>
         public TDestination Map(TSource source, TDestination destination, IMapContext context)
         {
-            var typedMap = TypedCompiledMapCache<TSource, TDestination>.Get(_compiledMapRegistry);
+            var typedMap = _typedMap;
             var compiledMap = typedMap.CompiledMap;
             if (compiledMap.ExistingDestinationInvoker == null)
             {

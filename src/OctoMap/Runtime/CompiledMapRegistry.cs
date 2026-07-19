@@ -44,14 +44,20 @@ namespace OctoMap.Runtime
         public CompiledMap GetOrAdd(Type sourceType, Type destinationType)
         {
             var key = new MapKey(sourceType, destinationType);
-            return _compiledMaps.GetOrAdd(key, _ => Compile(sourceType, destinationType));
+            return _compiledMaps.GetOrAdd(
+                key,
+                static (_, state) => state.Registry.Compile(state.SourceType, state.DestinationType),
+                (Registry: this, SourceType: sourceType, DestinationType: destinationType));
         }
 
         /// <inheritdoc/>
         public CompiledMap GetOrAdd(IReadOnlyList<Type> sourceTypes, Type destinationType)
         {
             var key = new MapKey(sourceTypes, destinationType);
-            return _compiledMaps.GetOrAdd(key, _ => Compile(sourceTypes, destinationType));
+            return _compiledMaps.GetOrAdd(
+                key,
+                static (_, state) => state.Registry.Compile(state.SourceTypes, state.DestinationType),
+                (Registry: this, SourceTypes: sourceTypes, DestinationType: destinationType));
         }
 
         /// <inheritdoc/>
