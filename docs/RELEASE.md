@@ -11,23 +11,26 @@ OctoMap uses semantic versioning.
 - Major versions contain breaking public API or behavior changes.
 - Alpha versions may change public APIs while the project is still stabilizing.
 
-Tags use the `v` prefix:
+Production deployments run from a release branch:
 
 ```text
-v1.0.0-alpha.1
+releases/v1.0.0
 ```
+
+The workflow creates the matching tag after validating the branch and changelog.
 
 ## Release Checklist
 
 Before publishing a release:
 
-1. Update `CHANGELOG.md`.
-2. Run `dotnet restore`.
-3. Run `dotnet build --configuration Release`.
-4. Run `dotnet test --configuration Release --no-build`.
-5. Run `dotnet pack src/OctoMap/OctoMap.csproj --configuration Release --output artifacts/package`.
-6. Verify that the package output includes `.nupkg` and `.snupkg`.
-7. Create or publish the GitHub release from the changelog entry.
+1. Create a branch named `releases/vX.Y.Z` from `main`.
+2. Update `CHANGELOG.md` with a `## [vX.Y.Z]` section.
+3. Run `dotnet restore`.
+4. Run `dotnet build --configuration Release`.
+5. Run `dotnet test --configuration Release --no-build`.
+6. Run `dotnet pack src/OctoMap/OctoMap.csproj --configuration Release --output artifacts/package`.
+7. Run `dotnet pack src/OctoMap.Analyzers/OctoMap.Analyzers.csproj --configuration Release --output artifacts/package`.
+8. Run the `Release to NuGet` workflow manually from the release branch.
 
 ## Package Quality
 
@@ -43,6 +46,6 @@ The package build must include:
 
 ## CI
 
-Pull requests run restore, build, test, and pack validation. The build matrix validates `net8.0`, `net9.0`, and `net10.0`.
+Pull requests and pushes to `main` run restore, build, and test. This is the trunk-based validation path.
 
-Publishing to NuGet is only allowed from a published GitHub release and requires `NUGET_API_KEY`.
+Publishing to NuGet is only allowed from a manually dispatched workflow on a branch named `releases/vX.Y.Z` and requires `NUGET_API_KEY`.

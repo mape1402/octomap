@@ -1,35 +1,47 @@
-name: Tag and Release
+name: Release to NuGet
 
 on:
-  push:
-    branches:
-      - "main"
-    paths:
-      - 'src/**'
-      - '*.sln'
-      - 'Directory.Build.props'
-      - 'CHANGELOG.md'
+  workflow_dispatch:
 
 jobs:
-  tag-and-release:
+  release:
     runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Get tag from CHANGELOG.md
-        id: changelog
+      - name: Validate release branch
+        id: version
+        shell: bash
         run: |
-          TAG_LINE=$(grep -m1 -E '^## \[v[0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.md)
-          TAG=$(echo "$TAG_LINE" | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+')
+          BRANCH="${GITHUB_REF_NAME}"
 
-          echo "TAG=$TAG"
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          if [[ ! "$BRANCH" =~ ^releases/v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Production releases must run from a branch named releases/vX.Y.Z. Current branch: $BRANCH"
+            exit 1
+          fi
+
+          TAG="${BRANCH#releases/}"
+          VERSION="${TAG#v}"
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Validate CHANGELOG entry
+        shell: bash
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          TAG_LINE=$(grep -m1 -E "^## \\[$TAG\\]" CHANGELOG.md || true)
+
+          if [[ -z "$TAG_LINE" ]]; then
+            echo "CHANGELOG.md must contain a section for $TAG before deploying."
+            exit 1
+          fi
 
           awk -v tag_line="$TAG_LINE" '
             $0 == tag_line { in_section=1; next }
@@ -37,19 +49,94 @@ jobs:
             in_section
           ' CHANGELOG.md > release_notes.txt
 
-      - name: Create Git tag and push
+          if [[ ! -s release_notes.txt ]]; then
+            echo "CHANGELOG.md section for $TAG is empty."
+            exit 1
+          fi
+
+      - name: Validate tag does not exist
+        shell: bash
         run: |
+          TAG="${{ steps.version.outputs.tag }}"
+
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists locally."
+            exit 1
+          fi
+
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists on origin."
+            exit 1
+          fi
+
+      - name: Install .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: >
+          dotnet build
+          --no-restore
+          --configuration Release
+          /p:Version=${{ steps.version.outputs.version }}
+          /p:PackageVersion=${{ steps.version.outputs.version }}
+          /p:MinVerVersionOverride=${{ steps.version.outputs.version }}
+
+      - name: Test
+        run: dotnet test --no-build --configuration Release --verbosity normal
+
+      - name: Pack OctoMap
+        run: >
+          dotnet pack src/OctoMap/OctoMap.csproj
+          --no-build
+          --configuration Release
+          --output ./nupkgs
+          /p:Version=${{ steps.version.outputs.version }}
+          /p:PackageVersion=${{ steps.version.outputs.version }}
+          /p:MinVerVersionOverride=${{ steps.version.outputs.version }}
+
+      - name: Pack OctoMap analyzers
+        run: >
+          dotnet pack src/OctoMap.Analyzers/OctoMap.Analyzers.csproj
+          --no-build
+          --configuration Release
+          --output ./nupkgs
+          /p:Version=${{ steps.version.outputs.version }}
+          /p:PackageVersion=${{ steps.version.outputs.version }}
+          /p:MinVerVersionOverride=${{ steps.version.outputs.version }}
+
+      - name: Create and push tag
+        shell: bash
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          git tag ${{ steps.changelog.outputs.tag }}
-          git push origin ${{ steps.changelog.outputs.tag }}
+          git tag "$TAG"
+          git push origin "$TAG"
 
-      - name: Create Draft Release
-        uses: softprops/action-gh-release@v1
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.changelog.outputs.tag }}
-          name: ${{ steps.changelog.outputs.tag }}
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
           body_path: release_notes.txt
-          draft: true
+          draft: false
+          prerelease: false
+          files: |
+            ./nupkgs/*.nupkg
+            ./nupkgs/*.snupkg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push to NuGet
+        run: |
+          dotnet nuget push ./nupkgs/*.nupkg -k ${{ secrets.NUGET_API_KEY }} -s https://api.nuget.org/v3/index.json --skip-duplicate
+          dotnet nuget push ./nupkgs/*.snupkg -k ${{ secrets.NUGET_API_KEY }} -s https://api.nuget.org/v3/index.json --skip-duplicate
