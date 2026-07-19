@@ -122,12 +122,13 @@ namespace OctoMap
             services.AddSingleton<IOctoMapConfiguration>(sp => sp.GetRequiredService<OctoMapConfiguration>());
             services.TryAddSingleton<IDynaBeeAssemblyBuilderFactory, DynaBeeAssemblyBuilderFactory>();
             services.AddSingleton<IInlineLifecycleActionRegistry>(new InlineLifecycleActionRegistry(inlineLifecycleActions));
+            services.AddSingleton<ICompiledMapDependencyProvider, CompiledMapDependencyProvider>();
             services.AddSingleton<IMappingGenerationBackend, DynabeeMappingGenerationBackend>();
             services.AddSingleton<ICompiledMapRegistry, CompiledMapRegistry>();
             services.AddSingleton<IOctoProjectionBuilder, OctoProjectionBuilder>();
             services.AddScoped<IMapContextFactory, MapContextFactory>();
             services.AddScoped<IOctoMapper, OctoMapper>();
-            services.AddTransient(typeof(IOctoMapper<,>), typeof(OctoMapper<,>));
+            services.AddSingleton(typeof(IOctoMapper<,>), typeof(OctoMapper<,>));
 
             return services;
         }

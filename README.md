@@ -1064,6 +1064,21 @@ dotnet test
 
 ## Benchmarks
 
+The benchmark project compares:
+
+- manual mapping
+- OctoMap generated mapping
+- AutoMapper
+- Mapster
+
+Covered scenarios include warm mapping, cold configuration and compile cost, startup compile, nested mapping, collection mapping, constructor mapping, flattening, and projection over LINQ to Objects.
+
+Current warm flat mapping measurements on .NET 8 have OctoMap in the same range as Mapster and materially faster than AutoMapper for the benchmarked flat object case:
+
+- OctoMap: about 31 ns, 56 B allocated
+- Mapster: about 32 ns, 56 B allocated
+- AutoMapper: about 89 ns, 56 B allocated
+
 ```bash
 dotnet run -c Release -f net8.0 --project benchmarks/OctoMap.Benchmarks/OctoMap.Benchmarks.csproj -- --filter *
 ```
@@ -1078,4 +1093,4 @@ Upcoming areas include:
 - deeper projection support
 - richer collection update and merge policies
 - richer diagnostics
-- benchmarks against manual mapping and AutoMapper
+- NativeAOT and mobile-friendly generation

@@ -1,5 +1,9 @@
 using BenchmarkDotNet.Attributes;
+using AutoMapper;
+using AutoMapper.QueryableExtensions;
+using Mapster;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,6 +17,9 @@ namespace OctoMap.Benchmarks
     public class MappingScenarioBenchmarks
     {
         private IOctoMapper _mapper = null!;
+        private AutoMapper.IMapper _autoMapper = null!;
+        private MapperConfiguration _autoMapperConfiguration = null!;
+        private TypeAdapterConfig _mapsterConfig = null!;
         private FlatSource _flatSource = null!;
         private NestedSource _nestedSource = null!;
         private CollectionSource _collectionSource = null!;
@@ -38,6 +45,11 @@ namespace OctoMap.Benchmarks
 
             _mapper = services.BuildServiceProvider().GetRequiredService<IOctoMapper>();
             _mapper.CompileMappings();
+            _autoMapperConfiguration = CreateAutoMapperConfiguration();
+            _autoMapperConfiguration.CompileMappings();
+            _autoMapper = _autoMapperConfiguration.CreateMapper();
+            _mapsterConfig = CreateMapsterConfiguration();
+            _mapsterConfig.Compile();
 
             _flatSource = new FlatSource { Id = 42, Name = "Ada", Total = 125.50m, StatusCode = "A" };
             _nestedSource = new NestedSource
@@ -84,6 +96,22 @@ namespace OctoMap.Benchmarks
             => _mapper.Map<FlatSource, FlatDestination>(_flatSource);
 
         /// <summary>
+        /// Measures a warmed AutoMapper flat map.
+        /// </summary>
+        /// <returns>The mapped destination.</returns>
+        [Benchmark]
+        public FlatDestination AutoMapper_Warm_Flat()
+            => _autoMapper.Map<FlatDestination>(_flatSource);
+
+        /// <summary>
+        /// Measures a warmed Mapster flat map.
+        /// </summary>
+        /// <returns>The mapped destination.</returns>
+        [Benchmark]
+        public FlatDestination Mapster_Warm_Flat()
+            => _flatSource.Adapt<FlatDestination>(_mapsterConfig);
+
+        /// <summary>
         /// Measures cold startup, configuration, compilation, and first map execution.
         /// </summary>
         /// <returns>The mapped destination.</returns>
@@ -94,6 +122,30 @@ namespace OctoMap.Benchmarks
             services.AddOctoMap(registration => registration.AddProfile<ColdBenchmarkProfile>());
             var mapper = services.BuildServiceProvider().GetRequiredService<IOctoMapper>();
             return mapper.Map<FlatSource, FlatDestination>(_flatSource);
+        }
+
+        /// <summary>
+        /// Measures AutoMapper cold startup, configuration, compilation, and first map execution.
+        /// </summary>
+        /// <returns>The mapped destination.</returns>
+        [Benchmark]
+        public FlatDestination AutoMapper_Cold_Compile_And_Map()
+        {
+            var configuration = CreateAutoMapperConfiguration();
+            configuration.CompileMappings();
+            return configuration.CreateMapper().Map<FlatDestination>(_flatSource);
+        }
+
+        /// <summary>
+        /// Measures Mapster cold startup, configuration, compilation, and first map execution.
+        /// </summary>
+        /// <returns>The mapped destination.</returns>
+        [Benchmark]
+        public FlatDestination Mapster_Cold_Compile_And_Map()
+        {
+            var configuration = CreateMapsterConfiguration();
+            configuration.Compile();
+            return _flatSource.Adapt<FlatDestination>(configuration);
         }
 
         /// <summary>
@@ -111,6 +163,20 @@ namespace OctoMap.Benchmarks
         }
 
         /// <summary>
+        /// Measures AutoMapper startup configuration and compilation.
+        /// </summary>
+        [Benchmark]
+        public void AutoMapper_Startup_Compile_All()
+            => CreateAutoMapperConfiguration().CompileMappings();
+
+        /// <summary>
+        /// Measures Mapster startup configuration and compilation.
+        /// </summary>
+        [Benchmark]
+        public void Mapster_Startup_Compile_All()
+            => CreateMapsterConfiguration().Compile();
+
+        /// <summary>
         /// Measures nested object mapping.
         /// </summary>
         /// <returns>The mapped destination.</returns>
@@ -119,12 +185,76 @@ namespace OctoMap.Benchmarks
             => _mapper.Map<NestedSource, NestedDestination>(_nestedSource);
 
         /// <summary>
+        /// Measures hand-written nested object mapping.
+        /// </summary>
+        /// <returns>The mapped destination.</returns>
+        [Benchmark]
+        public NestedDestination Manual_Nested()
+            => new()
+            {
+                Id = _nestedSource.Id,
+                Customer = new CustomerDestination
+                {
+                    FullName = _nestedSource.Customer.FirstName + " " + _nestedSource.Customer.LastName
+                }
+            };
+
+        /// <summary>
+        /// Measures AutoMapper nested object mapping.
+        /// </summary>
+        /// <returns>The mapped destination.</returns>
+        [Benchmark]
+        public NestedDestination AutoMapper_Nested()
+            => _autoMapper.Map<NestedDestination>(_nestedSource);
+
+        /// <summary>
+        /// Measures Mapster nested object mapping.
+        /// </summary>
+        /// <returns>The mapped destination.</returns>
+        [Benchmark]
+        public NestedDestination Mapster_Nested()
+            => _nestedSource.Adapt<NestedDestination>(_mapsterConfig);
+
+        /// <summary>
         /// Measures collection member mapping.
         /// </summary>
         /// <returns>The mapped destination.</returns>
         [Benchmark]
         public CollectionDestination OctoMap_Collections()
             => _mapper.Map<CollectionSource, CollectionDestination>(_collectionSource);
+
+        /// <summary>
+        /// Measures hand-written collection member mapping.
+        /// </summary>
+        /// <returns>The mapped destination.</returns>
+        [Benchmark]
+        public CollectionDestination Manual_Collections()
+            => new()
+            {
+                Items = _collectionSource.Items
+                    .Select(x => new ItemDestination
+                    {
+                        Sku = x.Sku,
+                        Quantity = x.Quantity
+                    })
+                    .ToArray()
+            };
+
+        /// <summary>
+        /// Measures AutoMapper collection member mapping.
+        /// </summary>
+        /// <returns>The mapped destination.</returns>
+        [Benchmark]
+        public CollectionDestination AutoMapper_Collections()
+            => _autoMapper.Map<CollectionDestination>(_collectionSource);
+
+        /// <summary>
+        /// Measures Mapster collection member mapping.
+        /// </summary>
+        /// <returns>The mapped destination.</returns>
+        [Benchmark]
+        public CollectionDestination Mapster_Collections()
+            => _collectionSource.Adapt<CollectionDestination>(_mapsterConfig);
 
         /// <summary>
         /// Measures DI resolver execution.
@@ -151,6 +281,30 @@ namespace OctoMap.Benchmarks
             => _mapper.Map<ConstructorSource, ConstructorDestination>(_constructorSource);
 
         /// <summary>
+        /// Measures hand-written constructor mapping.
+        /// </summary>
+        /// <returns>The mapped destination.</returns>
+        [Benchmark]
+        public ConstructorDestination Manual_Constructor()
+            => new(_constructorSource.Id, _constructorSource.Name);
+
+        /// <summary>
+        /// Measures AutoMapper constructor mapping.
+        /// </summary>
+        /// <returns>The mapped destination.</returns>
+        [Benchmark]
+        public ConstructorDestination AutoMapper_Constructor()
+            => _autoMapper.Map<ConstructorDestination>(_constructorSource);
+
+        /// <summary>
+        /// Measures Mapster constructor mapping.
+        /// </summary>
+        /// <returns>The mapped destination.</returns>
+        [Benchmark]
+        public ConstructorDestination Mapster_Constructor()
+            => _constructorSource.Adapt<ConstructorDestination>(_mapsterConfig);
+
+        /// <summary>
         /// Measures flattening by convention.
         /// </summary>
         /// <returns>The mapped destination.</returns>
@@ -159,12 +313,100 @@ namespace OctoMap.Benchmarks
             => _mapper.Map<FlatteningSource, FlatteningDestination>(_flatteningSource);
 
         /// <summary>
+        /// Measures hand-written flattening.
+        /// </summary>
+        /// <returns>The mapped destination.</returns>
+        [Benchmark]
+        public FlatteningDestination Manual_Flattening()
+            => new()
+            {
+                CustomerFirstName = _flatteningSource.Customer.FirstName
+            };
+
+        /// <summary>
+        /// Measures AutoMapper flattening by convention.
+        /// </summary>
+        /// <returns>The mapped destination.</returns>
+        [Benchmark]
+        public FlatteningDestination AutoMapper_Flattening()
+            => _autoMapper.Map<FlatteningDestination>(_flatteningSource);
+
+        /// <summary>
+        /// Measures Mapster flattening by convention.
+        /// </summary>
+        /// <returns>The mapped destination.</returns>
+        [Benchmark]
+        public FlatteningDestination Mapster_Flattening()
+            => _flatteningSource.Adapt<FlatteningDestination>(_mapsterConfig);
+
+        /// <summary>
         /// Measures projection expression usage over LINQ to Objects.
         /// </summary>
         /// <returns>The projected destination count.</returns>
         [Benchmark]
         public int OctoMap_Projection()
             => _queryable.ProjectTo<FlatDestination>(_mapper.ProjectionBuilder).Count();
+
+        /// <summary>
+        /// Measures hand-written projection expression usage over LINQ to Objects.
+        /// </summary>
+        /// <returns>The projected destination count.</returns>
+        [Benchmark]
+        public int Manual_Projection()
+            => _queryable.Select(x => new FlatDestination
+            {
+                Id = x.Id,
+                Name = x.Name,
+                Total = x.Total,
+                Status = x.StatusCode
+            }).Count();
+
+        /// <summary>
+        /// Measures AutoMapper projection expression usage over LINQ to Objects.
+        /// </summary>
+        /// <returns>The projected destination count.</returns>
+        [Benchmark]
+        public int AutoMapper_Projection()
+            => _queryable.ProjectTo<FlatDestination>(_autoMapperConfiguration).Count();
+
+        /// <summary>
+        /// Measures Mapster projection expression usage over LINQ to Objects.
+        /// </summary>
+        /// <returns>The projected destination count.</returns>
+        [Benchmark]
+        public int Mapster_Projection()
+            => _queryable.ProjectToType<FlatDestination>(_mapsterConfig).Count();
+
+        private static MapperConfiguration CreateAutoMapperConfiguration()
+            => new MapperConfiguration(configuration =>
+            {
+                configuration.CreateMap<FlatSource, FlatDestination>()
+                    .ForMember(x => x.Status, x => x.MapFrom(s => s.StatusCode));
+                configuration.CreateMap<CustomerSource, CustomerDestination>()
+                    .ForMember(x => x.FullName, x => x.MapFrom(s => s.FirstName + " " + s.LastName));
+                configuration.CreateMap<NestedSource, NestedDestination>();
+                configuration.CreateMap<ItemSource, ItemDestination>();
+                configuration.CreateMap<CollectionSource, CollectionDestination>();
+                configuration.CreateMap<ConstructorSource, ConstructorDestination>()
+                    .ConstructUsing(s => new ConstructorDestination(s.Id, s.Name));
+                configuration.CreateMap<FlatteningSource, FlatteningDestination>();
+            }, NullLoggerFactory.Instance);
+
+        private static TypeAdapterConfig CreateMapsterConfiguration()
+        {
+            var configuration = new TypeAdapterConfig();
+            configuration.NewConfig<FlatSource, FlatDestination>()
+                .Map(x => x.Status, x => x.StatusCode);
+            configuration.NewConfig<CustomerSource, CustomerDestination>()
+                .Map(x => x.FullName, x => x.FirstName + " " + x.LastName);
+            configuration.NewConfig<NestedSource, NestedDestination>();
+            configuration.NewConfig<ItemSource, ItemDestination>();
+            configuration.NewConfig<CollectionSource, CollectionDestination>();
+            configuration.NewConfig<ConstructorSource, ConstructorDestination>()
+                .MapToConstructor(true);
+            configuration.NewConfig<FlatteningSource, FlatteningDestination>();
+            return configuration;
+        }
     }
 
     /// <summary>

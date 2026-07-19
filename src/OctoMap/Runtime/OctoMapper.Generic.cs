@@ -1,4 +1,5 @@
 using OctoMap.Runtime;
+using OctoMap.Generation;
 
 namespace OctoMap
 {
@@ -23,20 +24,31 @@ namespace OctoMap
         /// <inheritdoc/>
         public TDestination Map(TSource source, IMapContext context)
         {
-            var compiledMap = _compiledMapRegistry.GetOrAdd(typeof(TSource), typeof(TDestination));
-            return (TDestination)compiledMap.Invoker.Invoke(new object[] { source, context });
+            var typedMap = TypedCompiledMapCache<TSource, TDestination>.Get(_compiledMapRegistry);
+            if (typedMap.ContextFreeMap != null)
+            {
+                return typedMap.ContextFreeMap(source);
+            }
+
+            return typedMap.Map(source, context);
         }
 
         /// <inheritdoc/>
         public TDestination Map(TSource source, TDestination destination, IMapContext context)
         {
-            var compiledMap = _compiledMapRegistry.GetOrAdd(typeof(TSource), typeof(TDestination));
+            var typedMap = TypedCompiledMapCache<TSource, TDestination>.Get(_compiledMapRegistry);
+            var compiledMap = typedMap.CompiledMap;
             if (compiledMap.ExistingDestinationInvoker == null)
             {
                 throw new InvalidOperationException($"Compiled map '{compiledMap.MapperType.FullName}' does not support existing destination invocation.");
             }
 
-            return (TDestination)compiledMap.ExistingDestinationInvoker.Invoke(new object[] { source, destination, context });
+            if (typedMap.ContextFreeExistingDestinationMap != null)
+            {
+                return typedMap.ContextFreeExistingDestinationMap(source, destination);
+            }
+
+            return typedMap.ExistingDestinationMap(source, destination, context);
         }
     }
 }

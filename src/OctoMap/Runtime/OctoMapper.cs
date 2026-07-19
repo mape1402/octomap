@@ -1,3 +1,4 @@
+using OctoMap.Generation;
 using OctoMap.Runtime;
 
 namespace OctoMap
@@ -37,14 +38,19 @@ namespace OctoMap
             }
 
             var compiledMap = _compiledMapRegistry.GetOrAdd(source.GetType(), typeof(TDestination));
-            return (TDestination)compiledMap.Invoker.Invoke(new object[] { source, _contextFactory.Create() });
+            return (TDestination)compiledMap.Invoker.Invoke(new object[] { source, CreateContext(compiledMap) });
         }
 
         /// <inheritdoc/>
         public TDestination Map<TSource, TDestination>(TSource source)
         {
-            var compiledMap = _compiledMapRegistry.GetOrAdd(typeof(TSource), typeof(TDestination));
-            return (TDestination)compiledMap.Invoker.Invoke(new object[] { source, _contextFactory.Create() });
+            var typedMap = TypedCompiledMapCache<TSource, TDestination>.Get(_compiledMapRegistry);
+            if (typedMap.ContextFreeMap != null)
+            {
+                return typedMap.ContextFreeMap(source);
+            }
+
+            return typedMap.Map(source, CreateContext(typedMap.CompiledMap));
         }
 
         /// <inheritdoc/>
@@ -55,13 +61,19 @@ namespace OctoMap
                 throw new ArgumentNullException(nameof(destination));
             }
 
-            var compiledMap = _compiledMapRegistry.GetOrAdd(typeof(TSource), typeof(TDestination));
+            var typedMap = TypedCompiledMapCache<TSource, TDestination>.Get(_compiledMapRegistry);
+            var compiledMap = typedMap.CompiledMap;
             if (compiledMap.ExistingDestinationInvoker == null)
             {
                 throw new InvalidOperationException($"Compiled map '{compiledMap.MapperType.FullName}' does not support existing destination invocation.");
             }
 
-            return (TDestination)compiledMap.ExistingDestinationInvoker.Invoke(new object[] { source, destination, _contextFactory.Create() });
+            if (typedMap.ContextFreeExistingDestinationMap != null)
+            {
+                return typedMap.ContextFreeExistingDestinationMap(source, destination);
+            }
+
+            return typedMap.ExistingDestinationMap(source, destination, CreateContext(compiledMap));
         }
 
         /// <inheritdoc/>
@@ -78,7 +90,7 @@ namespace OctoMap
                 throw new InvalidOperationException($"Compiled map '{compiledMap.MapperType.FullName}' does not support source set invocation.");
             }
 
-            return (TDestination)compiledMap.Invoker.Invoke(sources.Sources.Concat(new object[] { _contextFactory.Create() }).ToArray());
+            return (TDestination)compiledMap.Invoker.Invoke(sources.Sources.Concat(new object[] { CreateContext(compiledMap) }).ToArray());
         }
 
         /// <inheritdoc/>
@@ -99,5 +111,8 @@ namespace OctoMap
         /// <inheritdoc/>
         public void CompileMappings()
             => _compiledMapRegistry.CompileConfiguredMaps();
+
+        private IMapContext CreateContext(CompiledMap compiledMap)
+            => compiledMap.RequiresContext ? _contextFactory.Create() : null;
     }
 }

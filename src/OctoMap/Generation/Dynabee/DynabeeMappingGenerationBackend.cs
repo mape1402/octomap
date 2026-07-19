@@ -16,18 +16,25 @@ namespace OctoMap.Generation.Dynabee
     /// </summary>
     internal sealed class DynabeeMappingGenerationBackend : IMappingGenerationBackend
     {
-        private const string ExistingDestinationMethodName = "MapToExisting";
+        private const string ExistingDestinationMethodName = nameof(IGeneratedSingleSourceMapper<object, object>.MapToExisting);
+        private const string ContextFreeMethodName = nameof(IGeneratedContextFreeMapper<object, object>.MapContextFree);
+        private const string ContextFreeExistingDestinationMethodName = nameof(IGeneratedContextFreeMapper<object, object>.MapToExistingContextFree);
 
         private readonly IDynaBeeAssemblyBuilderFactory _builderFactory;
+        private readonly ICompiledMapDependencyProvider _dependencyProvider;
         private int _sequence;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="DynabeeMappingGenerationBackend"/> class.
         /// </summary>
         /// <param name="builderFactory">The DynaBee assembly builder factory.</param>
-        public DynabeeMappingGenerationBackend(IDynaBeeAssemblyBuilderFactory builderFactory)
+        /// <param name="dependencyProvider">The compiled child map dependency provider.</param>
+        public DynabeeMappingGenerationBackend(
+            IDynaBeeAssemblyBuilderFactory builderFactory,
+            ICompiledMapDependencyProvider dependencyProvider)
         {
             _builderFactory = builderFactory ?? throw new ArgumentNullException(nameof(builderFactory));
+            _dependencyProvider = dependencyProvider ?? throw new ArgumentNullException(nameof(dependencyProvider));
         }
 
         /// <inheritdoc/>
@@ -45,12 +52,28 @@ namespace OctoMap.Generation.Dynabee
                 throw new ArgumentNullException(nameof(plan));
             }
 
+            var dependencies = CreateDependencies(plan);
+            var requiresContext = RequiresGeneratedContext(plan, dependencies);
             var className = BuildClassName(plan);
             var context = _builderFactory
                 .Create($"OctoMap.Generated.{Interlocked.Increment(ref _sequence)}")
                 .DisableCache()
                 .AddClass(className, c =>
                 {
+                    foreach (var dependency in dependencies.Values)
+                    {
+                        InjectDependency(c, dependency.PropertyName, dependency.ContractType);
+                    }
+
+                    if (plan.SourceTypes.Count == 1)
+                    {
+                        c.Implements(typeof(IGeneratedSingleSourceMapper<,>).MakeGenericType(plan.SourceType, plan.DestinationType), false);
+                        if (!requiresContext)
+                        {
+                            c.Implements(typeof(IGeneratedContextFreeMapper<,>).MakeGenericType(plan.SourceType, plan.DestinationType), false);
+                        }
+                    }
+
                     c.RegisterAsConcrete(false);
 
                     c.AddMethod(nameof(IOctoMapper<object, object>.Map), plan.DestinationType, m =>
@@ -61,7 +84,7 @@ namespace OctoMap.Generation.Dynabee
                         }
 
                         m.WithParameter<IMapContext>("context")
-                            .EmitsBody(body => EmitMapMethod(body, plan, false));
+                            .EmitsBody(body => EmitMapMethod(body, plan, dependencies, false));
                     });
 
                     if (plan.SourceTypes.Count == 1)
@@ -70,12 +93,24 @@ namespace OctoMap.Generation.Dynabee
                             .WithParameter("source", plan.SourceType)
                             .WithParameter("destination", plan.DestinationType)
                             .WithParameter<IMapContext>("context")
-                            .EmitsBody(body => EmitMapMethod(body, plan, true)));
+                            .EmitsBody(body => EmitMapMethod(body, plan, dependencies, true)));
+
+                        if (!requiresContext)
+                        {
+                            c.AddMethod(ContextFreeMethodName, plan.DestinationType, m => m
+                                .WithParameter("source", plan.SourceType)
+                                .EmitsBody(body => EmitMapMethod(body, plan, dependencies, false, false)));
+
+                            c.AddMethod(ContextFreeExistingDestinationMethodName, plan.DestinationType, m => m
+                                .WithParameter("source", plan.SourceType)
+                                .WithParameter("destination", plan.DestinationType)
+                                .EmitsBody(body => EmitMapMethod(body, plan, dependencies, true, false)));
+                        }
                     }
                 })
                 .Build();
 
-            var mapper = context.CreateInstance(className);
+            var mapper = context.CreateInstance(className, dependencies.Values.Select(x => x.Instance).ToArray());
             var invoker = context.CreateBoundMethodInvoker(
                 className,
                 mapper,
@@ -88,12 +123,207 @@ namespace OctoMap.Generation.Dynabee
                     ExistingDestinationMethodName,
                     new[] { plan.SourceType, plan.DestinationType, typeof(IMapContext) })
                 : null;
+            var typedInvoker = plan.SourceTypes.Count == 1
+                ? CreateGeneratedMapperInvoker(mapper, plan.SourceType, plan.DestinationType)
+                : null;
+            var typedExistingDestinationInvoker = plan.SourceTypes.Count == 1
+                ? typedInvoker
+                : null;
+            var contextFreeInvoker = plan.SourceTypes.Count == 1 && !requiresContext
+                ? typedInvoker
+                : null;
+            var contextFreeExistingDestinationInvoker = plan.SourceTypes.Count == 1 && !requiresContext
+                ? typedInvoker
+                : null;
 
             return new CompiledMap(
                 mapper,
                 mapper.GetType(),
                 new DynabeeCompiledMapInvoker(invoker),
-                existingDestinationInvoker == null ? null : new DynabeeCompiledMapInvoker(existingDestinationInvoker));
+                existingDestinationInvoker == null ? null : new DynabeeCompiledMapInvoker(existingDestinationInvoker),
+                typedInvoker,
+                typedExistingDestinationInvoker,
+                contextFreeInvoker,
+                contextFreeExistingDestinationInvoker,
+                requiresContext);
+        }
+
+        private static object CreateGeneratedMapperInvoker(
+            object mapper,
+            Type sourceType,
+            Type destinationType)
+            => typeof(DynabeeMappingGenerationBackend)
+                .GetMethod(nameof(CreateGeneratedMapperInvokerCore), BindingFlags.NonPublic | BindingFlags.Static)
+                .MakeGenericMethod(sourceType, destinationType)
+                .Invoke(null, new[] { mapper });
+
+        private static object CreateGeneratedMapperInvokerCore<TSource, TDestination>(object mapper)
+            => new GeneratedOctoMapperInvoker<TSource, TDestination>((IGeneratedSingleSourceMapper<TSource, TDestination>)mapper);
+
+        private static void InjectDependency(BeeClassBuilder builder, string propertyName, Type dependencyType)
+            => typeof(BeeClassBuilder)
+                .GetMethods()
+                .Single(x => x.Name == nameof(BeeClassBuilder.Inject)
+                    && x.IsGenericMethodDefinition
+                    && x.GetParameters().Length == 2)
+                .MakeGenericMethod(dependencyType)
+                .Invoke(builder, new object[] { propertyName, null });
+
+        private IReadOnlyDictionary<MapDependencyKey, MapDependency> CreateDependencies(MappingPlan plan)
+        {
+            var dependencies = new Dictionary<MapDependencyKey, MapDependency>();
+            foreach (var assignment in plan.Assignments)
+            {
+                if (assignment.UseNestedMap)
+                {
+                    AddDependency(
+                        dependencies,
+                        assignment.SourceProperty.PropertyType,
+                        assignment.DestinationProperty.PropertyType,
+                        false,
+                        plan);
+                    AddDependency(
+                        dependencies,
+                        assignment.SourceProperty.PropertyType,
+                        assignment.DestinationProperty.PropertyType,
+                        true,
+                        plan);
+                    continue;
+                }
+
+                if (assignment.UseCollectionMap
+                    && !assignment.DestinationElementType.IsAssignableFrom(assignment.SourceElementType)
+                    && assignment.ElementTypeConversion == null)
+                {
+                    AddDependency(
+                        dependencies,
+                        assignment.SourceElementType,
+                        assignment.DestinationElementType,
+                        false,
+                        plan);
+                }
+            }
+
+            return dependencies;
+        }
+
+        private void AddDependency(
+            Dictionary<MapDependencyKey, MapDependency> dependencies,
+            Type sourceType,
+            Type destinationType,
+            bool existingDestination,
+            MappingPlan plan)
+        {
+            var key = new MapDependencyKey(sourceType, destinationType, existingDestination);
+            if (dependencies.ContainsKey(key)
+                || (sourceType == plan.SourceType && destinationType == plan.DestinationType))
+            {
+                return;
+            }
+
+            var compiledMap = _dependencyProvider.GetOrAdd(sourceType, destinationType);
+            var dependency = CreateDependency(key, compiledMap, dependencies.Count);
+            if (dependency != null)
+            {
+                dependencies.Add(key, dependency);
+            }
+        }
+
+        private static MapDependency CreateDependency(MapDependencyKey key, CompiledMap compiledMap, int index)
+        {
+            if (key.ExistingDestination)
+            {
+                if (compiledMap.ContextFreeExistingDestinationInvoker != null)
+                {
+                    return new MapDependency(
+                        $"MapDependency{index}",
+                        typeof(ICompiledContextFreeExistingDestinationMapInvoker<,>).MakeGenericType(key.SourceType, key.DestinationType),
+                        compiledMap.ContextFreeExistingDestinationInvoker,
+                        true);
+                }
+
+                if (compiledMap.TypedExistingDestinationInvoker != null)
+                {
+                    return new MapDependency(
+                        $"MapDependency{index}",
+                        typeof(ICompiledExistingDestinationMapInvoker<,>).MakeGenericType(key.SourceType, key.DestinationType),
+                        compiledMap.TypedExistingDestinationInvoker,
+                        false);
+                }
+
+                return null;
+            }
+
+            if (compiledMap.ContextFreeInvoker != null)
+            {
+                return new MapDependency(
+                    $"MapDependency{index}",
+                    typeof(ICompiledContextFreeMapInvoker<,>).MakeGenericType(key.SourceType, key.DestinationType),
+                    compiledMap.ContextFreeInvoker,
+                    true);
+            }
+
+            if (compiledMap.TypedInvoker != null)
+            {
+                return new MapDependency(
+                    $"MapDependency{index}",
+                    typeof(ICompiledMapInvoker<,>).MakeGenericType(key.SourceType, key.DestinationType),
+                    compiledMap.TypedInvoker,
+                    false);
+            }
+
+            return null;
+        }
+
+        private static bool RequiresGeneratedContext(
+            MappingPlan plan,
+            IReadOnlyDictionary<MapDependencyKey, MapDependency> dependencies)
+        {
+            if (plan.LifecycleActions.Count > 0)
+            {
+                return true;
+            }
+
+            if (plan.Construction?.Parameters?.Any(x => x.TypeConversion?.UsesServiceConverter == true) == true)
+            {
+                return true;
+            }
+
+            return plan.Assignments.Any(x => RequiresGeneratedContext(x, dependencies));
+        }
+
+        private static bool RequiresGeneratedContext(
+            MemberAssignmentPlan assignment,
+            IReadOnlyDictionary<MapDependencyKey, MapDependency> dependencies)
+        {
+            if (assignment.ResolverType != null
+                || assignment.ConverterType != null
+                || assignment.TypeConversion?.UsesServiceConverter == true
+                || assignment.ElementTypeConversion?.UsesServiceConverter == true)
+            {
+                return true;
+            }
+
+            if (assignment.UseNestedMap)
+            {
+                var createDependencyKey = new MapDependencyKey(assignment.SourceProperty.PropertyType, assignment.DestinationProperty.PropertyType, false);
+                var updateDependencyKey = new MapDependencyKey(assignment.SourceProperty.PropertyType, assignment.DestinationProperty.PropertyType, true);
+                return !dependencies.TryGetValue(createDependencyKey, out var createDependency)
+                    || !createDependency.ContextFree
+                    || !dependencies.TryGetValue(updateDependencyKey, out var updateDependency)
+                    || !updateDependency.ContextFree;
+            }
+
+            if (assignment.UseCollectionMap
+                && !assignment.DestinationElementType.IsAssignableFrom(assignment.SourceElementType)
+                && assignment.ElementTypeConversion == null)
+            {
+                var dependencyKey = new MapDependencyKey(assignment.SourceElementType, assignment.DestinationElementType, false);
+                return !dependencies.TryGetValue(dependencyKey, out var dependency)
+                    || !dependency.ContextFree;
+            }
+
+            return false;
         }
 
         private static string BuildClassName(MappingPlan plan)
@@ -109,12 +339,17 @@ namespace OctoMap.Generation.Dynabee
             return new string(chars);
         }
 
-        private static void EmitMapMethod(IBeeMethodBodyBuilder body, MappingPlan plan, bool useExistingDestination)
+        private static void EmitMapMethod(
+            IBeeMethodBodyBuilder body,
+            MappingPlan plan,
+            IReadOnlyDictionary<MapDependencyKey, MapDependency> dependencies,
+            bool useExistingDestination,
+            bool includeContextParameter = true)
         {
             var sources = plan.SourceTypes
                 .Select((_, index) => body.Parameter(GetSourceParameterName(plan, index)))
                 .ToArray();
-            var context = body.Parameter("context");
+            var context = includeContextParameter ? body.Parameter("context") : null;
 
             var destination = body.DeclareLocal("destination", plan.DestinationType);
             var existingDestination = useExistingDestination
@@ -141,7 +376,7 @@ namespace OctoMap.Generation.Dynabee
 
             foreach (var assignment in plan.Assignments)
             {
-                EmitAssignment(body, sources, destination, context, assignment, useExistingDestination);
+                EmitAssignment(body, sources, destination, context, dependencies, assignment, useExistingDestination);
             }
 
             EmitLifecycleActions(body, sources, destination, context, plan, LifecycleActionTiming.After);
@@ -207,6 +442,7 @@ namespace OctoMap.Generation.Dynabee
             IReadOnlyList<IBeeValueExpression> sources,
             IBeeValueExpression destination,
             IBeeValueExpression context,
+            IReadOnlyDictionary<MapDependencyKey, MapDependency> dependencies,
             MemberAssignmentPlan assignment,
             bool useExistingDestination)
         {
@@ -215,11 +451,11 @@ namespace OctoMap.Generation.Dynabee
                 var preCondition = BuildConditionExpression(body, sources, null, assignment.PreConditionExpression, assignment.SourceIndex);
                 body.If(
                     preCondition,
-                    whenTrue => EmitConditionalAssignment(whenTrue, sources, destination, context, assignment, useExistingDestination));
+                    whenTrue => EmitConditionalAssignment(whenTrue, sources, destination, context, dependencies, assignment, useExistingDestination));
                 return;
             }
 
-            EmitConditionalAssignment(body, sources, destination, context, assignment, useExistingDestination);
+            EmitConditionalAssignment(body, sources, destination, context, dependencies, assignment, useExistingDestination);
         }
 
         private static void EmitConditionalAssignment(
@@ -227,10 +463,11 @@ namespace OctoMap.Generation.Dynabee
             IReadOnlyList<IBeeValueExpression> sources,
             IBeeValueExpression destination,
             IBeeValueExpression context,
+            IReadOnlyDictionary<MapDependencyKey, MapDependency> dependencies,
             MemberAssignmentPlan assignment,
             bool useExistingDestination)
         {
-            var value = BuildAssignmentValue(body, sources, destination, context, assignment, useExistingDestination);
+            var value = BuildAssignmentValue(body, sources, destination, context, dependencies, assignment, useExistingDestination);
             var usesResolvedLocal = assignment.ConditionExpression != null
                 || (assignment.IgnoreNullSourceValue && CanBeNull(value.Type));
             var assignmentValue = value;
@@ -350,6 +587,7 @@ namespace OctoMap.Generation.Dynabee
             IReadOnlyList<IBeeValueExpression> sources,
             IBeeValueExpression destination,
             IBeeValueExpression context,
+            IReadOnlyDictionary<MapDependencyKey, MapDependency> dependencies,
             MemberAssignmentPlan assignment,
             bool useExistingDestination)
         {
@@ -372,11 +610,11 @@ namespace OctoMap.Generation.Dynabee
             }
             else if (assignment.UseCollectionMap)
             {
-                value = BuildCollectionMapValue(body, sources, context, assignment);
+                value = BuildCollectionMapValue(body, sources, context, dependencies, assignment);
             }
             else if (assignment.UseNestedMap)
             {
-                value = BuildNestedMapValue(body, sources, destination, context, assignment, useExistingDestination);
+                value = BuildNestedMapValue(body, sources, destination, context, dependencies, assignment, useExistingDestination);
             }
             else if (assignment.UseFlattenedMap)
             {
@@ -479,6 +717,7 @@ namespace OctoMap.Generation.Dynabee
             IBeeMethodBodyBuilder body,
             IReadOnlyList<IBeeValueExpression> sources,
             IBeeValueExpression context,
+            IReadOnlyDictionary<MapDependencyKey, MapDependency> dependencies,
             MemberAssignmentPlan assignment)
         {
             var source = sources[assignment.SourceIndex];
@@ -504,7 +743,7 @@ namespace OctoMap.Generation.Dynabee
                             $"item_{assignment.DestinationProperty.Name}",
                             (sourceItem, loop) =>
                             {
-                                var destinationItem = BuildCollectionItemValue(loop, sourceItem, context, assignment);
+                                var destinationItem = BuildCollectionItemValue(loop, sourceItem, context, dependencies, assignment);
                                 AddCollectionItem(loop, destinationCollection, destinationItem, assignment);
                             });
                         return;
@@ -525,7 +764,7 @@ namespace OctoMap.Generation.Dynabee
                         body: loop =>
                         {
                             var sourceItem = loop.Index(indexedSourceCollection, index);
-                            var destinationItem = BuildCollectionItemValue(loop, sourceItem, context, assignment);
+                            var destinationItem = BuildCollectionItemValue(loop, sourceItem, context, dependencies, assignment);
                             AssignCollectionItem(loop, destinationCollection, index, destinationItem, assignment);
                         });
                 });
@@ -571,6 +810,7 @@ namespace OctoMap.Generation.Dynabee
             IBeeMethodBodyBuilder body,
             IBeeValueExpression sourceItem,
             IBeeValueExpression context,
+            IReadOnlyDictionary<MapDependencyKey, MapDependency> dependencies,
             MemberAssignmentPlan assignment)
         {
             if (assignment.DestinationElementType.IsAssignableFrom(assignment.SourceElementType))
@@ -588,17 +828,22 @@ namespace OctoMap.Generation.Dynabee
                     : body.Convert(convertedItem, assignment.DestinationElementType);
             }
 
-            var services = body.Property(context, nameof(IMapContext.Services));
-            var mapper = body.StaticCall(GetRequiredServiceMethod(typeof(IOctoMapper)), services);
-            var mapMethod = typeof(IOctoMapper)
-                .GetMethods()
-                .Single(x => x.Name == nameof(IOctoMapper.Map)
-                    && x.IsGenericMethodDefinition
-                    && x.GetGenericArguments().Length == 2
-                    && x.GetParameters().Length == 1)
-                .MakeGenericMethod(assignment.SourceElementType, assignment.DestinationElementType);
+            var dependencyKey = new MapDependencyKey(assignment.SourceElementType, assignment.DestinationElementType, false);
+            if (dependencies.TryGetValue(dependencyKey, out var dependency))
+            {
+                var dependencyMapper = body.Property(body.Self(), dependency.PropertyName);
+                var invokeMethod = dependency.ContractType.GetMethod(nameof(ICompiledMapInvoker<object, object>.Invoke));
+                return dependency.ContextFree
+                    ? body.Call(dependencyMapper, invokeMethod, sourceItem)
+                    : body.Call(dependencyMapper, invokeMethod, sourceItem, context);
+            }
 
-            return body.Call(mapper, mapMethod, sourceItem);
+            var mapperContract = typeof(IOctoMapper<,>).MakeGenericType(assignment.SourceElementType, assignment.DestinationElementType);
+            var services = body.Property(context, nameof(IMapContext.Services));
+            var mapper = body.StaticCall(GetRequiredServiceMethod(mapperContract), services);
+            var mapMethod = mapperContract.GetMethod(nameof(IOctoMapper<object, object>.Map), new[] { assignment.SourceElementType, typeof(IMapContext) });
+
+            return body.Call(mapper, mapMethod, sourceItem, context);
         }
 
         private static void AssignCollectionItem(
@@ -641,21 +886,16 @@ namespace OctoMap.Generation.Dynabee
             IReadOnlyList<IBeeValueExpression> sources,
             IBeeValueExpression destination,
             IBeeValueExpression context,
+            IReadOnlyDictionary<MapDependencyKey, MapDependency> dependencies,
             MemberAssignmentPlan assignment,
             bool useExistingDestination)
         {
             var source = sources[assignment.SourceIndex];
             var sourceValue = body.Property(source, assignment.SourceProperty.Name);
-            var services = body.Property(context, nameof(IMapContext.Services));
-            var mapper = body.StaticCall(GetRequiredServiceMethod(typeof(IOctoMapper)), services);
-            var createMapMethod = typeof(IOctoMapper)
-                .GetMethods()
-                .Single(x => x.Name == nameof(IOctoMapper.Map)
-                    && x.IsGenericMethodDefinition
-                    && x.GetGenericArguments().Length == 2
-                    && x.GetParameters().Length == 1)
-                .MakeGenericMethod(sourceValue.Type, assignment.DestinationProperty.PropertyType);
-            var mappedValue = body.Call(mapper, createMapMethod, sourceValue);
+            var createDependencyKey = new MapDependencyKey(sourceValue.Type, assignment.DestinationProperty.PropertyType, false);
+            var mappedValue = dependencies.TryGetValue(createDependencyKey, out var createDependency)
+                ? BuildDependencyMapCall(body, sourceValue, context, createDependency)
+                : BuildServiceMapCall(body, sourceValue, context, assignment.DestinationProperty.PropertyType);
 
             if (!useExistingDestination)
             {
@@ -666,14 +906,10 @@ namespace OctoMap.Generation.Dynabee
             }
 
             var destinationValue = body.Property(destination, assignment.DestinationProperty.Name);
-            var updateMapMethod = typeof(IOctoMapper)
-                .GetMethods()
-                .Single(x => x.Name == nameof(IOctoMapper.Map)
-                    && x.IsGenericMethodDefinition
-                    && x.GetGenericArguments().Length == 2
-                    && x.GetParameters().Length == 2)
-                .MakeGenericMethod(sourceValue.Type, assignment.DestinationProperty.PropertyType);
-            var updatedValue = body.Call(mapper, updateMapMethod, sourceValue, destinationValue);
+            var updateDependencyKey = new MapDependencyKey(sourceValue.Type, assignment.DestinationProperty.PropertyType, true);
+            var updatedValue = dependencies.TryGetValue(updateDependencyKey, out var updateDependency)
+                ? BuildDependencyMapCall(body, sourceValue, destinationValue, context, updateDependency)
+                : BuildServiceExistingDestinationMapCall(body, sourceValue, destinationValue, context, assignment.DestinationProperty.PropertyType);
 
             return body.If(
                 body.IsNull(sourceValue),
@@ -682,6 +918,60 @@ namespace OctoMap.Generation.Dynabee
                     body.IsNull(destinationValue),
                     mappedValue,
                     updatedValue));
+        }
+
+        private static IBeeValueExpression BuildDependencyMapCall(
+            IBeeMethodBodyBuilder body,
+            IBeeValueExpression sourceValue,
+            IBeeValueExpression context,
+            MapDependency dependency)
+        {
+            var mapper = body.Property(body.Self(), dependency.PropertyName);
+            var invokeMethod = dependency.ContractType.GetMethod(nameof(ICompiledMapInvoker<object, object>.Invoke));
+            return dependency.ContextFree
+                ? body.Call(mapper, invokeMethod, sourceValue)
+                : body.Call(mapper, invokeMethod, sourceValue, context);
+        }
+
+        private static IBeeValueExpression BuildDependencyMapCall(
+            IBeeMethodBodyBuilder body,
+            IBeeValueExpression sourceValue,
+            IBeeValueExpression destinationValue,
+            IBeeValueExpression context,
+            MapDependency dependency)
+        {
+            var mapper = body.Property(body.Self(), dependency.PropertyName);
+            var invokeMethod = dependency.ContractType.GetMethod(nameof(ICompiledExistingDestinationMapInvoker<object, object>.Invoke));
+            return dependency.ContextFree
+                ? body.Call(mapper, invokeMethod, sourceValue, destinationValue)
+                : body.Call(mapper, invokeMethod, sourceValue, destinationValue, context);
+        }
+
+        private static IBeeValueExpression BuildServiceMapCall(
+            IBeeMethodBodyBuilder body,
+            IBeeValueExpression sourceValue,
+            IBeeValueExpression context,
+            Type destinationType)
+        {
+            var mapperContract = typeof(IOctoMapper<,>).MakeGenericType(sourceValue.Type, destinationType);
+            var services = body.Property(context, nameof(IMapContext.Services));
+            var mapper = body.StaticCall(GetRequiredServiceMethod(mapperContract), services);
+            var mapMethod = mapperContract.GetMethod(nameof(IOctoMapper<object, object>.Map), new[] { sourceValue.Type, typeof(IMapContext) });
+            return body.Call(mapper, mapMethod, sourceValue, context);
+        }
+
+        private static IBeeValueExpression BuildServiceExistingDestinationMapCall(
+            IBeeMethodBodyBuilder body,
+            IBeeValueExpression sourceValue,
+            IBeeValueExpression destinationValue,
+            IBeeValueExpression context,
+            Type destinationType)
+        {
+            var mapperContract = typeof(IOctoMapper<,>).MakeGenericType(sourceValue.Type, destinationType);
+            var services = body.Property(context, nameof(IMapContext.Services));
+            var mapper = body.StaticCall(GetRequiredServiceMethod(mapperContract), services);
+            var mapMethod = mapperContract.GetMethod(nameof(IOctoMapper<object, object>.Map), new[] { sourceValue.Type, destinationType, typeof(IMapContext) });
+            return body.Call(mapper, mapMethod, sourceValue, destinationValue, context);
         }
 
         private static IBeeValueExpression BuildFlattenedMapValue(
@@ -995,6 +1285,52 @@ namespace OctoMap.Generation.Dynabee
                     && x.IsGenericMethodDefinition
                     && x.GetParameters().Length == 1)
                 .MakeGenericMethod(elementType);
+
+        private readonly struct MapDependencyKey : IEquatable<MapDependencyKey>
+        {
+            public MapDependencyKey(Type sourceType, Type destinationType, bool existingDestination)
+            {
+                SourceType = sourceType;
+                DestinationType = destinationType;
+                ExistingDestination = existingDestination;
+            }
+
+            public Type SourceType { get; }
+
+            public Type DestinationType { get; }
+
+            public bool ExistingDestination { get; }
+
+            public bool Equals(MapDependencyKey other)
+                => SourceType == other.SourceType
+                    && DestinationType == other.DestinationType
+                    && ExistingDestination == other.ExistingDestination;
+
+            public override bool Equals(object obj)
+                => obj is MapDependencyKey other && Equals(other);
+
+            public override int GetHashCode()
+                => HashCode.Combine(SourceType, DestinationType, ExistingDestination);
+        }
+
+        private sealed class MapDependency
+        {
+            public MapDependency(string propertyName, Type contractType, object instance, bool contextFree)
+            {
+                PropertyName = propertyName;
+                ContractType = contractType;
+                Instance = instance;
+                ContextFree = contextFree;
+            }
+
+            public string PropertyName { get; }
+
+            public Type ContractType { get; }
+
+            public object Instance { get; }
+
+            public bool ContextFree { get; }
+        }
 
     }
 }

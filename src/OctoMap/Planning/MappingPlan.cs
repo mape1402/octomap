@@ -82,6 +82,7 @@ namespace OctoMap.Planning
             Assignments = assignments ?? throw new ArgumentNullException(nameof(assignments));
             Construction = construction;
             LifecycleActions = lifecycleActions ?? throw new ArgumentNullException(nameof(lifecycleActions));
+            RequiresContext = RequiresRuntimeContext(assignments, construction, lifecycleActions);
         }
 
         /// <summary>
@@ -114,6 +115,36 @@ namespace OctoMap.Planning
         /// </summary>
         public IReadOnlyList<LifecycleActionPlan> LifecycleActions { get; }
 
+        /// <summary>
+        /// Gets whether the generated mapper requires a runtime mapping context.
+        /// </summary>
+        public bool RequiresContext { get; }
+
+        private static bool RequiresRuntimeContext(
+            IReadOnlyList<MemberAssignmentPlan> assignments,
+            DestinationConstructionPlan construction,
+            IReadOnlyList<LifecycleActionPlan> lifecycleActions)
+        {
+            if (lifecycleActions.Count > 0)
+            {
+                return true;
+            }
+
+            if (construction?.Parameters?.Any(x => x.TypeConversion?.UsesServiceConverter == true) == true)
+            {
+                return true;
+            }
+
+            return assignments.Any(RequiresRuntimeContext);
+        }
+
+        private static bool RequiresRuntimeContext(MemberAssignmentPlan assignment)
+            => assignment.ResolverType != null
+                || assignment.ConverterType != null
+                || assignment.UseNestedMap
+                || assignment.TypeConversion?.UsesServiceConverter == true
+                || assignment.ElementTypeConversion?.UsesServiceConverter == true
+                || assignment.UseCollectionMap;
     }
 
     /// <summary>

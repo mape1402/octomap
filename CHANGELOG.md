@@ -12,3 +12,5 @@
 - Package quality settings for SourceLink, deterministic builds, portable symbols, and NuGet symbol packages.
 - Initial `OctoMap.Analyzers` package with map attribute and runtime-only projection diagnostics.
 - Projection parameter support for replacing captured `MapFrom(...)` values in `ProjectTo(...)`.
+- Competitive benchmarks against AutoMapper and Mapster for flat, cold compile, startup compile, nested, collections, constructor, flattening, and projection scenarios.
+- Optimized warm single-source mapping with typed generated mapper invocation, per-registry generic map caching, context-free execution, generated child-map dependency calls, and a per-generic fast slot that avoids concurrent cache lookup on the hot path.
