@@ -6,3 +6,7 @@
 
 - Initial OctoMap solution structure based on DynaBee.
 - Library, test, benchmark, documentation, package, and CI scaffolding.
+- Eager mapping compilation APIs for startup warmup and fail-fast validation.
+- Configuration organization APIs for explicit profiles, map scanning, filters, duplicate policies, and diagnostics.
+- Expanded BenchmarkDotNet scenarios for runtime, compile, projection, resolver, converter, collection, constructor, nested, and flattening paths.
+- Package quality settings for SourceLink, deterministic builds, portable symbols, and NuGet symbol packages.

@@ -1,5 +1,9 @@
 # OctoMap
 
+[![Build](https://github.com/mape1402/octomap/actions/workflows/publish.yaml/badge.svg)](https://github.com/mape1402/octomap/actions/workflows/publish.yaml)
+[![NuGet](https://img.shields.io/nuget/v/OctoMap.svg)](https://www.nuget.org/packages/OctoMap)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 **OctoMap** is a lightweight .NET object mapping library built on top of **DynaBee** runtime code generation.
 
 OctoMap is designed for applications that want AutoMapper-style configuration, but prefer generated mapper types over reflection-heavy runtime mapping. Profiles describe the mapping rules, OctoMap turns those rules into mapping plans, and DynaBee generates the executable mapper classes and method invokers.

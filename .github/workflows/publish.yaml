@@ -8,16 +8,24 @@ on:
       - '.github/workflows/publish.yaml'
       - '*.sln'
       - 'Directory.Build.props'
+      - 'benchmarks/**'
   release:
     types: [published]
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target-framework:
+          - net8.0
+          - net9.0
+          - net10.0
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install .NET SDK
         uses: actions/setup-dotnet@v4
@@ -31,19 +39,23 @@ jobs:
         run: dotnet restore
 
       - name: Build
-        run: dotnet build --no-restore --configuration Release
+        run: dotnet build --no-restore --configuration Release --framework ${{ matrix.target-framework }}
 
       - name: Test
-        run: dotnet test --no-build --configuration Release --verbosity normal
+        run: dotnet test --no-build --configuration Release --framework ${{ matrix.target-framework }} --verbosity normal
 
       - name: Pack
-        run: dotnet pack src/OctoMap/OctoMap.csproj --no-build --configuration Release --output ./nupkgs
+        if: matrix.target-framework == 'net10.0'
+        run: dotnet pack src/OctoMap/OctoMap.csproj --configuration Release --output ./nupkgs
 
       - name: Upload artifacts
+        if: matrix.target-framework == 'net10.0'
         uses: actions/upload-artifact@v4
         with:
           name: nuget-packages
-          path: ./nupkgs/*.nupkg
+          path: |
+            ./nupkgs/*.nupkg
+            ./nupkgs/*.snupkg
 
   publish:
     if: github.event_name == 'release' && github.event.action == 'published'
@@ -58,4 +70,6 @@ jobs:
           path: ./nupkgs
 
       - name: Push to NuGet
-        run: dotnet nuget push ./nupkgs/*.nupkg -k ${{ secrets.NUGET_API_KEY }} -s https://api.nuget.org/v3/index.json --skip-duplicate
+        run: |
+          dotnet nuget push ./nupkgs/*.nupkg -k ${{ secrets.NUGET_API_KEY }} -s https://api.nuget.org/v3/index.json --skip-duplicate
+          dotnet nuget push ./nupkgs/*.snupkg -k ${{ secrets.NUGET_API_KEY }} -s https://api.nuget.org/v3/index.json --skip-duplicate
