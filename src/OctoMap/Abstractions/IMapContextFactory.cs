@@ -1,14 +1,14 @@
 namespace OctoMap
 {
     /// <summary>
-    /// Creates per-operation mapping contexts.
+    /// Creates mapping contexts for the current mapper scope.
     /// </summary>
     public interface IMapContextFactory
     {
         /// <summary>
-        /// Creates a new mapping context.
+        /// Creates a mapping context.
         /// </summary>
-        /// <returns>A new mapping context instance.</returns>
+        /// <returns>A mapping context instance.</returns>
         IMapContext Create();
     }
 }

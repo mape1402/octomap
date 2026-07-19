@@ -17,6 +17,14 @@ namespace OctoMap.Benchmarks
     public class MappingScenarioBenchmarks
     {
         private IOctoMapper _mapper = null!;
+        private IOctoMapper<FlatSource, FlatDestination> _typedFlatMapper = null!;
+        private IOctoMapper<FlatSource, ResolverDestination> _typedResolverMapper = null!;
+        private IOctoMapper<FlatSource, ConverterDestination> _typedConverterMapper = null!;
+        private IOctoMapper<FlatSource, SimpleConverterDestination> _typedSimpleConverterMapper = null!;
+        private IMapContext _mapContext = null!;
+        private IServiceProvider _services = null!;
+        private CurrencyTextConverter _directConverter = null!;
+        private IncrementConverter _directSimpleConverter = null!;
         private AutoMapper.IMapper _autoMapper = null!;
         private MapperConfiguration _autoMapperConfiguration = null!;
         private TypeAdapterConfig _mapsterConfig = null!;
@@ -37,13 +45,23 @@ namespace OctoMap.Benchmarks
             services.AddSingleton<StatusCatalog>();
             services.AddTransient<StatusResolver>();
             services.AddTransient<CurrencyTextConverter>();
+            services.AddTransient<IncrementConverter>();
             services.AddOctoMap(registration =>
             {
                 registration.Options.EnableRuntimeImplicitMaps = false;
                 registration.AddProfile<BenchmarkProfile>();
             });
 
-            _mapper = services.BuildServiceProvider().GetRequiredService<IOctoMapper>();
+            var provider = services.BuildServiceProvider();
+            _services = provider;
+            _mapper = provider.GetRequiredService<IOctoMapper>();
+            _typedFlatMapper = provider.GetRequiredService<IOctoMapper<FlatSource, FlatDestination>>();
+            _typedResolverMapper = provider.GetRequiredService<IOctoMapper<FlatSource, ResolverDestination>>();
+            _typedConverterMapper = provider.GetRequiredService<IOctoMapper<FlatSource, ConverterDestination>>();
+            _typedSimpleConverterMapper = provider.GetRequiredService<IOctoMapper<FlatSource, SimpleConverterDestination>>();
+            _mapContext = provider.GetRequiredService<IMapContextFactory>().Create();
+            _directConverter = new CurrencyTextConverter();
+            _directSimpleConverter = new IncrementConverter();
             _mapper.CompileMappings();
             _autoMapperConfiguration = CreateAutoMapperConfiguration();
             _autoMapperConfiguration.CompileMappings();
@@ -94,6 +112,14 @@ namespace OctoMap.Benchmarks
         [Benchmark]
         public FlatDestination OctoMap_Warm_Flat()
             => _mapper.Map<FlatSource, FlatDestination>(_flatSource);
+
+        /// <summary>
+        /// Measures a warmed typed OctoMap flat map.
+        /// </summary>
+        /// <returns>The mapped destination.</returns>
+        [Benchmark]
+        public FlatDestination OctoMap_Typed_Warm_Flat()
+            => _typedFlatMapper.Map(_flatSource, _mapContext);
 
         /// <summary>
         /// Measures a warmed AutoMapper flat map.
@@ -158,6 +184,7 @@ namespace OctoMap.Benchmarks
             services.AddSingleton<StatusCatalog>();
             services.AddTransient<StatusResolver>();
             services.AddTransient<CurrencyTextConverter>();
+            services.AddTransient<IncrementConverter>();
             services.AddOctoMap(registration => registration.AddProfile<BenchmarkProfile>());
             services.BuildServiceProvider().GetRequiredService<IOctoMapper>().CompileMappings();
         }
@@ -265,12 +292,76 @@ namespace OctoMap.Benchmarks
             => _mapper.Map<FlatSource, ResolverDestination>(_flatSource);
 
         /// <summary>
+        /// Measures typed DI resolver execution.
+        /// </summary>
+        /// <returns>The mapped destination.</returns>
+        [Benchmark]
+        public ResolverDestination OctoMap_Typed_Resolver()
+            => _typedResolverMapper.Map(_flatSource, _mapContext);
+
+        /// <summary>
         /// Measures DI value converter execution.
         /// </summary>
         /// <returns>The mapped destination.</returns>
         [Benchmark]
         public ConverterDestination OctoMap_Converter()
             => _mapper.Map<FlatSource, ConverterDestination>(_flatSource);
+
+        /// <summary>
+        /// Measures typed DI value converter execution.
+        /// </summary>
+        /// <returns>The mapped destination.</returns>
+        [Benchmark]
+        public ConverterDestination OctoMap_Typed_Converter()
+            => _typedConverterMapper.Map(_flatSource, _mapContext);
+
+        /// <summary>
+        /// Measures simple DI value converter execution.
+        /// </summary>
+        /// <returns>The mapped destination.</returns>
+        [Benchmark]
+        public SimpleConverterDestination OctoMap_Simple_Converter()
+            => _mapper.Map<FlatSource, SimpleConverterDestination>(_flatSource);
+
+        /// <summary>
+        /// Measures typed simple DI value converter execution.
+        /// </summary>
+        /// <returns>The mapped destination.</returns>
+        [Benchmark]
+        public SimpleConverterDestination OctoMap_Typed_Simple_Converter()
+            => _typedSimpleConverterMapper.Map(_flatSource, _mapContext);
+
+        /// <summary>
+        /// Measures direct converter invocation without mapper or service provider overhead.
+        /// </summary>
+        /// <returns>The converted destination member.</returns>
+        [Benchmark]
+        public string Manual_Converter_Direct()
+            => _directConverter.Convert(_flatSource.Total, _mapContext);
+
+        /// <summary>
+        /// Measures converter resolution through the service provider and direct invocation.
+        /// </summary>
+        /// <returns>The converted destination member.</returns>
+        [Benchmark]
+        public string Manual_Converter_ServiceProvider()
+            => _services.GetRequiredService<CurrencyTextConverter>().Convert(_flatSource.Total, _mapContext);
+
+        /// <summary>
+        /// Measures direct simple converter invocation without mapper or service provider overhead.
+        /// </summary>
+        /// <returns>The converted destination member.</returns>
+        [Benchmark]
+        public int Manual_Simple_Converter_Direct()
+            => _directSimpleConverter.Convert(_flatSource.Id, _mapContext);
+
+        /// <summary>
+        /// Measures simple converter resolution through the service provider and direct invocation.
+        /// </summary>
+        /// <returns>The converted destination member.</returns>
+        [Benchmark]
+        public int Manual_Simple_Converter_ServiceProvider()
+            => _services.GetRequiredService<IncrementConverter>().Convert(_flatSource.Id, _mapContext);
 
         /// <summary>
         /// Measures constructor mapping.
@@ -428,6 +519,8 @@ namespace OctoMap.Benchmarks
                 .ForMember(x => x.Status, x => x.ResolveUsing<StatusResolver>());
             builder.CreateMap<FlatSource, ConverterDestination>()
                 .ForMember(x => x.TotalText, x => x.ConvertUsing<CurrencyTextConverter>(s => s.Total));
+            builder.CreateMap<FlatSource, SimpleConverterDestination>()
+                .ForMember(x => x.Value, x => x.ConvertUsing<IncrementConverter>(s => s.Id));
             builder.CreateMap<ConstructorSource, ConstructorDestination>();
             builder.CreateMap<FlatteningSource, FlatteningDestination>();
         }
@@ -487,6 +580,16 @@ namespace OctoMap.Benchmarks
         /// <inheritdoc/>
         public string Convert(decimal sourceMember, IMapContext context)
             => sourceMember.ToString("0.00");
+    }
+
+    /// <summary>
+    /// Converts integer values with a minimal arithmetic operation.
+    /// </summary>
+    public sealed class IncrementConverter : IValueConverter<int, int>
+    {
+        /// <inheritdoc/>
+        public int Convert(int sourceMember, IMapContext context)
+            => sourceMember + 1;
     }
 
     /// <summary>
@@ -674,6 +777,17 @@ namespace OctoMap.Benchmarks
         /// Gets or sets the total text.
         /// </summary>
         public string TotalText { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// Represents a destination model for simple converter benchmarks.
+    /// </summary>
+    public sealed class SimpleConverterDestination
+    {
+        /// <summary>
+        /// Gets or sets the converted value.
+        /// </summary>
+        public int Value { get; set; }
     }
 
     /// <summary>

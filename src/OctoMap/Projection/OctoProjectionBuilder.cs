@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Linq.Expressions;
 using System.Reflection;
 using OctoMap.Configuration;
@@ -14,6 +15,7 @@ namespace OctoMap.Projection
         private readonly IOctoMapConfiguration _configuration;
         private readonly OctoMapOptions _options;
         private readonly IMappingPlanBuilder _planBuilder;
+        private readonly ConcurrentDictionary<ProjectionCacheKey, LambdaExpression> _projectionCache = new();
         private readonly IOctoMapValidator _validator;
 
         /// <summary>
@@ -60,10 +62,22 @@ namespace OctoMap.Projection
                 throw new ArgumentNullException(nameof(destinationType));
             }
 
+            var projectionParameters = ProjectionParameterBag.From(parameters);
+            if (projectionParameters.IsEmpty)
+            {
+                return _projectionCache.GetOrAdd(
+                    new ProjectionCacheKey(sourceType, destinationType),
+                    key => BuildUncached(key.SourceType, key.DestinationType, projectionParameters));
+            }
+
+            return BuildUncached(sourceType, destinationType, projectionParameters);
+        }
+
+        private LambdaExpression BuildUncached(Type sourceType, Type destinationType, ProjectionParameterBag projectionParameters)
+        {
             var typeMap = _configuration.FindMap(sourceType, destinationType)
                 ?? CreateImplicitMap(sourceType, destinationType);
 
-            var projectionParameters = ProjectionParameterBag.From(parameters);
             typeMap = CreateProjectionMap(typeMap, projectionParameters);
 
             var report = _validator.Validate(new[] { typeMap });
@@ -529,6 +543,29 @@ namespace OctoMap.Projection
 
             public bool TryGetValue(string name, out object value)
                 => _values.TryGetValue(name, out value);
+        }
+
+        private readonly struct ProjectionCacheKey : IEquatable<ProjectionCacheKey>
+        {
+            public ProjectionCacheKey(Type sourceType, Type destinationType)
+            {
+                SourceType = sourceType;
+                DestinationType = destinationType;
+            }
+
+            public Type SourceType { get; }
+
+            public Type DestinationType { get; }
+
+            public bool Equals(ProjectionCacheKey other)
+                => SourceType == other.SourceType
+                    && DestinationType == other.DestinationType;
+
+            public override bool Equals(object obj)
+                => obj is ProjectionCacheKey other && Equals(other);
+
+            public override int GetHashCode()
+                => HashCode.Combine(SourceType, DestinationType);
         }
     }
 }

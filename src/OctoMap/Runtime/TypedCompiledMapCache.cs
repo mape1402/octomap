@@ -42,7 +42,7 @@ namespace OctoMap.Runtime
     }
 
     /// <summary>
-    /// Stores pre-resolved delegates for a closed generic compiled map.
+    /// Stores pre-resolved typed mapper contracts and fallback delegates for a closed generic compiled map.
     /// </summary>
     /// <typeparam name="TSource">The source type.</typeparam>
     /// <typeparam name="TDestination">The destination type.</typeparam>
@@ -50,14 +50,22 @@ namespace OctoMap.Runtime
     {
         private TypedCompiledMap(
             CompiledMap compiledMap,
+            IOctoContextFreeMapping<TSource, TDestination> contextFreeMapper,
+            IOctoMapping<TSource, TDestination> mapper,
             Func<TSource, TDestination> contextFreeMap,
             Func<TSource, IMapContext, TDestination> map,
+            IOctoContextFreeExistingDestinationMapping<TSource, TDestination> contextFreeExistingDestinationMapper,
+            IOctoExistingDestinationMapping<TSource, TDestination> existingDestinationMapper,
             Func<TSource, TDestination, TDestination> contextFreeExistingDestinationMap,
             Func<TSource, TDestination, IMapContext, TDestination> existingDestinationMap)
         {
             CompiledMap = compiledMap;
+            ContextFreeMapper = contextFreeMapper;
+            Mapper = mapper;
             ContextFreeMap = contextFreeMap;
             Map = map;
+            ContextFreeExistingDestinationMapper = contextFreeExistingDestinationMapper;
+            ExistingDestinationMapper = existingDestinationMapper;
             ContextFreeExistingDestinationMap = contextFreeExistingDestinationMap;
             ExistingDestinationMap = existingDestinationMap;
         }
@@ -68,6 +76,16 @@ namespace OctoMap.Runtime
         public CompiledMap CompiledMap { get; }
 
         /// <summary>
+        /// Gets the generated context-free mapper contract when available.
+        /// </summary>
+        public IOctoContextFreeMapping<TSource, TDestination> ContextFreeMapper { get; }
+
+        /// <summary>
+        /// Gets the generated context-aware mapper contract when available.
+        /// </summary>
+        public IOctoMapping<TSource, TDestination> Mapper { get; }
+
+        /// <summary>
         /// Gets a context-free map delegate when the generated map does not require runtime context.
         /// </summary>
         public Func<TSource, TDestination> ContextFreeMap { get; }
@@ -76,6 +94,16 @@ namespace OctoMap.Runtime
         /// Gets a context-aware map delegate.
         /// </summary>
         public Func<TSource, IMapContext, TDestination> Map { get; }
+
+        /// <summary>
+        /// Gets the generated context-free existing-destination mapper contract when available.
+        /// </summary>
+        public IOctoContextFreeExistingDestinationMapping<TSource, TDestination> ContextFreeExistingDestinationMapper { get; }
+
+        /// <summary>
+        /// Gets the generated existing-destination mapper contract when available.
+        /// </summary>
+        public IOctoExistingDestinationMapping<TSource, TDestination> ExistingDestinationMapper { get; }
 
         /// <summary>
         /// Gets a context-free existing-destination map delegate when available.
@@ -101,19 +129,18 @@ namespace OctoMap.Runtime
 
             return new TypedCompiledMap<TSource, TDestination>(
                 compiledMap,
+                compiledMap.Mapper as IOctoContextFreeMapping<TSource, TDestination>,
+                compiledMap.Mapper as IOctoMapping<TSource, TDestination>,
                 CreateContextFreeMap(compiledMap),
                 CreateMap(compiledMap),
+                compiledMap.Mapper as IOctoContextFreeExistingDestinationMapping<TSource, TDestination>,
+                compiledMap.Mapper as IOctoExistingDestinationMapping<TSource, TDestination>,
                 CreateContextFreeExistingDestinationMap(compiledMap),
                 CreateExistingDestinationMap(compiledMap));
         }
 
         private static Func<TSource, TDestination> CreateContextFreeMap(CompiledMap compiledMap)
         {
-            if (compiledMap.Mapper is IGeneratedContextFreeMapper<TSource, TDestination> generatedMapper)
-            {
-                return generatedMapper.MapContextFree;
-            }
-
             if (compiledMap.ContextFreeInvoker is ICompiledContextFreeMapInvoker<TSource, TDestination> invoker)
             {
                 return invoker.Invoke;
@@ -124,11 +151,6 @@ namespace OctoMap.Runtime
 
         private static Func<TSource, IMapContext, TDestination> CreateMap(CompiledMap compiledMap)
         {
-            if (compiledMap.Mapper is IGeneratedSingleSourceMapper<TSource, TDestination> generatedMapper)
-            {
-                return generatedMapper.Map;
-            }
-
             if (compiledMap.TypedInvoker is ICompiledMapInvoker<TSource, TDestination> invoker)
             {
                 return invoker.Invoke;
@@ -139,11 +161,6 @@ namespace OctoMap.Runtime
 
         private static Func<TSource, TDestination, TDestination> CreateContextFreeExistingDestinationMap(CompiledMap compiledMap)
         {
-            if (compiledMap.Mapper is IGeneratedContextFreeMapper<TSource, TDestination> generatedMapper)
-            {
-                return generatedMapper.MapToExistingContextFree;
-            }
-
             if (compiledMap.ContextFreeExistingDestinationInvoker is ICompiledContextFreeExistingDestinationMapInvoker<TSource, TDestination> invoker)
             {
                 return invoker.Invoke;
@@ -154,11 +171,6 @@ namespace OctoMap.Runtime
 
         private static Func<TSource, TDestination, IMapContext, TDestination> CreateExistingDestinationMap(CompiledMap compiledMap)
         {
-            if (compiledMap.Mapper is IGeneratedSingleSourceMapper<TSource, TDestination> generatedMapper)
-            {
-                return generatedMapper.MapToExisting;
-            }
-
             if (compiledMap.TypedExistingDestinationInvoker is ICompiledExistingDestinationMapInvoker<TSource, TDestination> invoker)
             {
                 return invoker.Invoke;

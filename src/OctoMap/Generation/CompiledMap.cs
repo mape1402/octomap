@@ -1,3 +1,5 @@
+using OctoMap.Planning;
+
 namespace OctoMap.Generation
 {
     /// <summary>
@@ -11,7 +13,7 @@ namespace OctoMap.Generation
         /// <param name="mapper">The generated mapper instance.</param>
         /// <param name="mapperType">The generated mapper type.</param>
         public CompiledMap(object mapper, Type mapperType)
-            : this(mapper, mapperType, null, null, null, null, null, null, true)
+            : this(mapper, mapperType, null, null, null, null, null, null, null, null, true, null)
         {
         }
 
@@ -22,7 +24,7 @@ namespace OctoMap.Generation
         /// <param name="mapperType">The generated mapper type.</param>
         /// <param name="invoker">The compiled map invoker.</param>
         public CompiledMap(object mapper, Type mapperType, ICompiledMapInvoker invoker)
-            : this(mapper, mapperType, invoker, null, null, null, null, null, true)
+            : this(mapper, mapperType, invoker, null, null, null, null, null, null, null, true, null)
         {
         }
 
@@ -38,7 +40,7 @@ namespace OctoMap.Generation
             Type mapperType,
             ICompiledMapInvoker invoker,
             ICompiledMapInvoker existingDestinationInvoker)
-            : this(mapper, mapperType, invoker, existingDestinationInvoker, null, null, null, null, true)
+            : this(mapper, mapperType, invoker, existingDestinationInvoker, null, null, null, null, null, null, true, null)
         {
         }
 
@@ -53,7 +55,10 @@ namespace OctoMap.Generation
         /// <param name="typedExistingDestinationInvoker">The typed existing destination map invoker.</param>
         /// <param name="contextFreeInvoker">The context-free typed single-source map invoker.</param>
         /// <param name="contextFreeExistingDestinationInvoker">The context-free typed existing destination map invoker.</param>
+        /// <param name="contextFreeObjectMap">The context-free object map delegate.</param>
+        /// <param name="objectMap">The context-aware object map delegate.</param>
         /// <param name="requiresContext">A value indicating whether the map requires a runtime context.</param>
+        /// <param name="plan">The backend-neutral mapping plan used to produce the mapper.</param>
         public CompiledMap(
             object mapper,
             Type mapperType,
@@ -63,7 +68,10 @@ namespace OctoMap.Generation
             object typedExistingDestinationInvoker,
             object contextFreeInvoker,
             object contextFreeExistingDestinationInvoker,
-            bool requiresContext)
+            Func<object, object> contextFreeObjectMap,
+            Func<object, IMapContext, object> objectMap,
+            bool requiresContext,
+            MappingPlan plan = null)
         {
             Mapper = mapper ?? throw new ArgumentNullException(nameof(mapper));
             MapperType = mapperType ?? throw new ArgumentNullException(nameof(mapperType));
@@ -73,7 +81,10 @@ namespace OctoMap.Generation
             TypedExistingDestinationInvoker = typedExistingDestinationInvoker;
             ContextFreeInvoker = contextFreeInvoker;
             ContextFreeExistingDestinationInvoker = contextFreeExistingDestinationInvoker;
+            ContextFreeObjectMap = contextFreeObjectMap;
+            ObjectMap = objectMap;
             RequiresContext = requiresContext;
+            Plan = plan;
         }
 
         /// <summary>
@@ -117,8 +128,23 @@ namespace OctoMap.Generation
         public object ContextFreeExistingDestinationInvoker { get; }
 
         /// <summary>
+        /// Gets the context-free object map delegate.
+        /// </summary>
+        public Func<object, object> ContextFreeObjectMap { get; }
+
+        /// <summary>
+        /// Gets the context-aware object map delegate.
+        /// </summary>
+        public Func<object, IMapContext, object> ObjectMap { get; }
+
+        /// <summary>
         /// Gets whether the map requires a runtime context.
         /// </summary>
         public bool RequiresContext { get; }
+
+        /// <summary>
+        /// Gets the backend-neutral mapping plan used to produce the mapper.
+        /// </summary>
+        public MappingPlan Plan { get; }
     }
 }

@@ -6,15 +6,30 @@ namespace OctoMap
     public sealed class SourceSet
     {
         private readonly List<object> _sources;
+        private readonly Type[] _sourceTypes;
 
         private SourceSet(IEnumerable<object> sources)
         {
-            _sources = sources?.Select(x => x ?? throw new ArgumentException("Source sets cannot contain null values.", nameof(sources))).ToList()
-                ?? throw new ArgumentNullException(nameof(sources));
+            if (sources == null)
+            {
+                throw new ArgumentNullException(nameof(sources));
+            }
+
+            _sources = new List<object>();
+            foreach (var source in sources)
+            {
+                _sources.Add(source ?? throw new ArgumentException("Source sets cannot contain null values.", nameof(sources)));
+            }
 
             if (_sources.Count == 0)
             {
                 throw new ArgumentException("At least one source instance is required.", nameof(sources));
+            }
+
+            _sourceTypes = new Type[_sources.Count];
+            for (var index = 0; index < _sources.Count; index++)
+            {
+                _sourceTypes[index] = _sources[index].GetType();
             }
         }
 
@@ -26,7 +41,7 @@ namespace OctoMap
         /// <summary>
         /// Gets the runtime source types.
         /// </summary>
-        public IReadOnlyList<Type> SourceTypes => _sources.Select(x => x.GetType()).ToArray();
+        public IReadOnlyList<Type> SourceTypes => _sourceTypes;
 
         /// <summary>
         /// Creates a source set from the specified source instances.

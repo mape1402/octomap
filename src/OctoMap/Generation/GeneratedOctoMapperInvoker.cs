@@ -11,17 +11,21 @@ namespace OctoMap.Generation
         ICompiledContextFreeMapInvoker<TSource, TDestination>,
         ICompiledContextFreeExistingDestinationMapInvoker<TSource, TDestination>
     {
-        private readonly IGeneratedSingleSourceMapper<TSource, TDestination> _mapper;
-        private readonly IGeneratedContextFreeMapper<TSource, TDestination> _contextFreeMapper;
+        private readonly IOctoMapping<TSource, TDestination> _mapper;
+        private readonly IOctoExistingDestinationMapping<TSource, TDestination> _existingDestinationMapper;
+        private readonly IOctoContextFreeMapping<TSource, TDestination> _contextFreeMapper;
+        private readonly IOctoContextFreeExistingDestinationMapping<TSource, TDestination> _contextFreeExistingDestinationMapper;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="GeneratedOctoMapperInvoker{TSource, TDestination}"/> class.
         /// </summary>
-        /// <param name="mapper">The generated mapper instance.</param>
-        public GeneratedOctoMapperInvoker(IGeneratedSingleSourceMapper<TSource, TDestination> mapper)
+        /// <param name="mapper">The compiled mapper instance.</param>
+        public GeneratedOctoMapperInvoker(IOctoMapping<TSource, TDestination> mapper)
         {
             _mapper = mapper ?? throw new ArgumentNullException(nameof(mapper));
-            _contextFreeMapper = mapper as IGeneratedContextFreeMapper<TSource, TDestination>;
+            _existingDestinationMapper = mapper as IOctoExistingDestinationMapping<TSource, TDestination>;
+            _contextFreeMapper = mapper as IOctoContextFreeMapping<TSource, TDestination>;
+            _contextFreeExistingDestinationMapper = mapper as IOctoContextFreeExistingDestinationMapping<TSource, TDestination>;
         }
 
         /// <inheritdoc/>
@@ -30,7 +34,7 @@ namespace OctoMap.Generation
 
         /// <inheritdoc/>
         public TDestination Invoke(TSource source, TDestination destination, IMapContext context)
-            => _mapper.MapToExisting(source, destination, context);
+            => _existingDestinationMapper.MapToExisting(source, destination, context);
 
         /// <inheritdoc/>
         public TDestination Invoke(TSource source)
@@ -38,6 +42,6 @@ namespace OctoMap.Generation
 
         /// <inheritdoc/>
         public TDestination Invoke(TSource source, TDestination destination)
-            => _contextFreeMapper.MapToExistingContextFree(source, destination);
+            => _contextFreeExistingDestinationMapper.MapToExistingContextFree(source, destination);
     }
 }

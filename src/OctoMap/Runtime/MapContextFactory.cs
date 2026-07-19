@@ -5,7 +5,7 @@ namespace OctoMap.Runtime
     /// </summary>
     internal sealed class MapContextFactory : IMapContextFactory
     {
-        private readonly IServiceProvider _services;
+        private readonly IMapContext _context;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="MapContextFactory"/> class.
@@ -13,11 +13,11 @@ namespace OctoMap.Runtime
         /// <param name="services">The service provider for the current scope.</param>
         public MapContextFactory(IServiceProvider services)
         {
-            _services = services ?? throw new ArgumentNullException(nameof(services));
+            _context = new MapContext(services ?? throw new ArgumentNullException(nameof(services)));
         }
 
         /// <inheritdoc/>
         public IMapContext Create()
-            => new MapContext(_services);
+            => _context;
     }
 }

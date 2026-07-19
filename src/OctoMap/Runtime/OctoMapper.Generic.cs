@@ -25,6 +25,16 @@ namespace OctoMap
         public TDestination Map(TSource source, IMapContext context)
         {
             var typedMap = TypedCompiledMapCache<TSource, TDestination>.Get(_compiledMapRegistry);
+            if (typedMap.ContextFreeMapper != null)
+            {
+                return typedMap.ContextFreeMapper.MapContextFree(source);
+            }
+
+            if (typedMap.Mapper != null)
+            {
+                return typedMap.Mapper.Map(source, context);
+            }
+
             if (typedMap.ContextFreeMap != null)
             {
                 return typedMap.ContextFreeMap(source);
@@ -41,6 +51,16 @@ namespace OctoMap
             if (compiledMap.ExistingDestinationInvoker == null)
             {
                 throw new InvalidOperationException($"Compiled map '{compiledMap.MapperType.FullName}' does not support existing destination invocation.");
+            }
+
+            if (typedMap.ContextFreeExistingDestinationMapper != null)
+            {
+                return typedMap.ContextFreeExistingDestinationMapper.MapToExistingContextFree(source, destination);
+            }
+
+            if (typedMap.ExistingDestinationMapper != null)
+            {
+                return typedMap.ExistingDestinationMapper.MapToExisting(source, destination, context);
             }
 
             if (typedMap.ContextFreeExistingDestinationMap != null)
