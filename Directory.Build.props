@@ -16,7 +16,7 @@
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <DebugType>portable</DebugType>
 
-    <Authors>Mario Perez</Authors>
+    <Authors>Elysium Coding</Authors>
     <Company>Elysium Coding</Company>
     <RepositoryUrl>https://github.com/mape1402/octomap</RepositoryUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
