@@ -26,6 +26,7 @@ OctoMap is designed for applications that want AutoMapper-style configuration, b
 - Supports attribute-based map registration and member configuration.
 - Supports configurable member naming conventions.
 - Supports explicit registration organization through profiles, assembly scans, filters, duplicate policies, and configuration diagnostics.
+- Provides first-pass analyzer tooling through `OctoMap.Analyzers`.
 - Uses DynaBee-generated method bodies and invokers for hot execution paths.
 - Integrates with `Microsoft.Extensions.DependencyInjection`.
 
@@ -1028,6 +1029,8 @@ Multi-source map: 701 - Ada - Priority order - Ada
 ```
 
 ## Development
+
+Analyzer documentation lives in [docs/ANALYZERS.md](docs/ANALYZERS.md).
 
 ```bash
 dotnet restore

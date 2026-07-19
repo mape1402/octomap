@@ -19,6 +19,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "samples", "samples", "{5D20
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OctoMap.Samples.Basic", "samples\OctoMap.Samples.Basic\OctoMap.Samples.Basic.csproj", "{85F85A8C-C531-498A-9483-867F306680B7}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OctoMap.Analyzers", "src\OctoMap.Analyzers\OctoMap.Analyzers.csproj", "{FE6EA750-7AF7-4AC4-BA3C-C9BB1FA15ED7}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -77,6 +79,18 @@ Global
 		{85F85A8C-C531-498A-9483-867F306680B7}.Release|x64.Build.0 = Release|Any CPU
 		{85F85A8C-C531-498A-9483-867F306680B7}.Release|x86.ActiveCfg = Release|Any CPU
 		{85F85A8C-C531-498A-9483-867F306680B7}.Release|x86.Build.0 = Release|Any CPU
+		{FE6EA750-7AF7-4AC4-BA3C-C9BB1FA15ED7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FE6EA750-7AF7-4AC4-BA3C-C9BB1FA15ED7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FE6EA750-7AF7-4AC4-BA3C-C9BB1FA15ED7}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{FE6EA750-7AF7-4AC4-BA3C-C9BB1FA15ED7}.Debug|x64.Build.0 = Debug|Any CPU
+		{FE6EA750-7AF7-4AC4-BA3C-C9BB1FA15ED7}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{FE6EA750-7AF7-4AC4-BA3C-C9BB1FA15ED7}.Debug|x86.Build.0 = Debug|Any CPU
+		{FE6EA750-7AF7-4AC4-BA3C-C9BB1FA15ED7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FE6EA750-7AF7-4AC4-BA3C-C9BB1FA15ED7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FE6EA750-7AF7-4AC4-BA3C-C9BB1FA15ED7}.Release|x64.ActiveCfg = Release|Any CPU
+		{FE6EA750-7AF7-4AC4-BA3C-C9BB1FA15ED7}.Release|x64.Build.0 = Release|Any CPU
+		{FE6EA750-7AF7-4AC4-BA3C-C9BB1FA15ED7}.Release|x86.ActiveCfg = Release|Any CPU
+		{FE6EA750-7AF7-4AC4-BA3C-C9BB1FA15ED7}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -86,5 +100,6 @@ Global
 		{34004E2B-BC94-44A6-A193-BEE45FCD2BB8} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{639A27C0-E660-4A84-973F-6ECCB8009759} = {66320409-64EC-F7C5-3DEF-65E7510DAAD1}
 		{85F85A8C-C531-498A-9483-867F306680B7} = {5D20AA90-6969-D8BD-9DCD-8634F4692FDA}
+		{FE6EA750-7AF7-4AC4-BA3C-C9BB1FA15ED7} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 EndGlobal

@@ -10,3 +10,4 @@
 - Configuration organization APIs for explicit profiles, map scanning, filters, duplicate policies, and diagnostics.
 - Expanded BenchmarkDotNet scenarios for runtime, compile, projection, resolver, converter, collection, constructor, nested, and flattening paths.
 - Package quality settings for SourceLink, deterministic builds, portable symbols, and NuGet symbol packages.
+- Initial `OctoMap.Analyzers` package with map attribute and runtime-only projection diagnostics.
