@@ -1,5 +1,6 @@
 using System.Linq.Expressions;
 using System.Reflection;
+using DynaBee;
 using DynaBee.FluentApi;
 using DynaBee.FluentApi.Body;
 using DynaBee.FluentApi.DependencyInjection;
@@ -19,12 +20,14 @@ namespace OctoMap.Generation.Dynabee
         private const string ExistingDestinationMethodName = "MapToExisting";
         private const string ContextFreeMethodName = "MapContextFree";
         private const string ContextFreeExistingDestinationMethodName = "MapToExistingContextFree";
-        private static readonly MethodInfo CreateGeneratedMapperInvokerCoreMethod = typeof(DynabeeMappingGenerationBackend)
-            .GetMethod(nameof(CreateGeneratedMapperInvokerCore), BindingFlags.NonPublic | BindingFlags.Static);
-        private static readonly MethodInfo CreateObjectMapperCoreMethod = typeof(DynabeeMappingGenerationBackend)
-            .GetMethod(nameof(CreateObjectMapperCore), BindingFlags.NonPublic | BindingFlags.Static);
-        private static readonly MethodInfo CreateContextFreeObjectMapperCoreMethod = typeof(DynabeeMappingGenerationBackend)
-            .GetMethod(nameof(CreateContextFreeObjectMapperCore), BindingFlags.NonPublic | BindingFlags.Static);
+        private static readonly MethodInfo CreateTypedMapInvokerCoreMethod = typeof(DynabeeMappingGenerationBackend)
+            .GetMethod(nameof(CreateTypedMapInvokerCore), BindingFlags.NonPublic | BindingFlags.Static);
+        private static readonly MethodInfo CreateTypedExistingDestinationMapInvokerCoreMethod = typeof(DynabeeMappingGenerationBackend)
+            .GetMethod(nameof(CreateTypedExistingDestinationMapInvokerCore), BindingFlags.NonPublic | BindingFlags.Static);
+        private static readonly MethodInfo CreateTypedContextFreeMapInvokerCoreMethod = typeof(DynabeeMappingGenerationBackend)
+            .GetMethod(nameof(CreateTypedContextFreeMapInvokerCore), BindingFlags.NonPublic | BindingFlags.Static);
+        private static readonly MethodInfo CreateTypedContextFreeExistingDestinationMapInvokerCoreMethod = typeof(DynabeeMappingGenerationBackend)
+            .GetMethod(nameof(CreateTypedContextFreeExistingDestinationMapInvokerCore), BindingFlags.NonPublic | BindingFlags.Static);
         private static readonly MethodInfo BeeClassBuilderInjectMethod = typeof(BeeClassBuilder)
             .GetMethods()
             .Single(x => x.Name == nameof(BeeClassBuilder.Inject)
@@ -157,35 +160,35 @@ namespace OctoMap.Generation.Dynabee
                 .Build();
 
             var mapper = context.CreateInstance(className, dependencies.Values.Select(x => x.Instance).ToArray());
-            var invoker = context.CreateBoundMethodInvoker(
+            var invoker = context.CreateArgumentListAdapter(
                 className,
                 mapper,
                 nameof(IOctoMapper<object, object>.Map),
                 plan.SourceTypes.Concat(new[] { typeof(IMapContext) }).ToArray());
             var existingDestinationInvoker = plan.SourceTypes.Count == 1
-                ? context.CreateBoundMethodInvoker(
+                ? context.CreateArgumentListAdapter(
                     className,
                     mapper,
                     ExistingDestinationMethodName,
                     new[] { plan.SourceType, plan.DestinationType, typeof(IMapContext) })
                 : null;
             var typedInvoker = plan.SourceTypes.Count == 1
-                ? CreateGeneratedMapperInvoker(mapper, plan.SourceType, plan.DestinationType)
+                ? CreateTypedMapInvoker(context, className, mapper, plan.SourceType, plan.DestinationType)
                 : null;
             var typedExistingDestinationInvoker = plan.SourceTypes.Count == 1
-                ? typedInvoker
+                ? CreateTypedExistingDestinationMapInvoker(context, className, mapper, plan.SourceType, plan.DestinationType)
                 : null;
             var contextFreeInvoker = plan.SourceTypes.Count == 1 && !requiresContext
-                ? typedInvoker
+                ? CreateTypedContextFreeMapInvoker(context, className, mapper, plan.SourceType, plan.DestinationType)
                 : null;
             var contextFreeExistingDestinationInvoker = plan.SourceTypes.Count == 1 && !requiresContext
-                ? typedInvoker
+                ? CreateTypedContextFreeExistingDestinationMapInvoker(context, className, mapper, plan.SourceType, plan.DestinationType)
                 : null;
             var contextFreeObjectMap = plan.SourceTypes.Count == 1 && !requiresContext
-                ? CreateContextFreeObjectMapper(mapper, plan.SourceType, plan.DestinationType)
+                ? context.CreateObjectAdapter(className, mapper, ContextFreeMethodName, new[] { plan.SourceType })
                 : null;
             var objectMap = plan.SourceTypes.Count == 1
-                ? CreateObjectMapper(mapper, plan.SourceType, plan.DestinationType)
+                ? CreateObjectMapper(context, className, mapper, plan.SourceType)
                 : null;
 
             return new CompiledMap(
@@ -203,43 +206,115 @@ namespace OctoMap.Generation.Dynabee
                 plan);
         }
 
-        private static object CreateGeneratedMapperInvoker(
+        private static object CreateTypedMapInvoker(
+            IAssemblyContext context,
+            string className,
             object mapper,
             Type sourceType,
             Type destinationType)
-            => CreateGeneratedMapperInvokerCoreMethod
+            => CreateTypedMapInvokerCoreMethod
                 .MakeGenericMethod(sourceType, destinationType)
-                .Invoke(null, new[] { mapper });
+                .Invoke(null, new[] { context, className, mapper });
 
-        private static object CreateGeneratedMapperInvokerCore<TSource, TDestination>(object mapper)
-            => new GeneratedOctoMapperInvoker<TSource, TDestination>((IOctoMapping<TSource, TDestination>)mapper);
-
-        private static Func<object, IMapContext, object> CreateObjectMapper(
-            object mapper,
-            Type sourceType,
-            Type destinationType)
-            => (Func<object, IMapContext, object>)CreateObjectMapperCoreMethod
-                .MakeGenericMethod(sourceType, destinationType)
-                .Invoke(null, new[] { mapper });
-
-        private static Func<object, IMapContext, object> CreateObjectMapperCore<TSource, TDestination>(object mapper)
+        private static object CreateTypedMapInvokerCore<TSource, TDestination>(
+            IAssemblyContext context,
+            string className,
+            object mapper)
         {
-            var typedMapper = (IOctoMapping<TSource, TDestination>)mapper;
-            return (source, context) => typedMapper.Map((TSource)source, context);
+            var map = context.CreateBoundDelegate<Func<TSource, IMapContext, TDestination>>(
+                className,
+                mapper,
+                nameof(IOctoMapper<object, object>.Map),
+                new[] { typeof(TSource), typeof(IMapContext) });
+
+            return new DynabeeTypedMapInvoker<TSource, TDestination>(map);
         }
 
-        private static Func<object, object> CreateContextFreeObjectMapper(
+        private static object CreateTypedExistingDestinationMapInvoker(
+            IAssemblyContext context,
+            string className,
             object mapper,
             Type sourceType,
             Type destinationType)
-            => (Func<object, object>)CreateContextFreeObjectMapperCoreMethod
+            => CreateTypedExistingDestinationMapInvokerCoreMethod
                 .MakeGenericMethod(sourceType, destinationType)
-                .Invoke(null, new[] { mapper });
+                .Invoke(null, new[] { context, className, mapper });
 
-        private static Func<object, object> CreateContextFreeObjectMapperCore<TSource, TDestination>(object mapper)
+        private static object CreateTypedExistingDestinationMapInvokerCore<TSource, TDestination>(
+            IAssemblyContext context,
+            string className,
+            object mapper)
         {
-            var typedMapper = (IOctoContextFreeMapping<TSource, TDestination>)mapper;
-            return source => typedMapper.MapContextFree((TSource)source);
+            var map = context.CreateBoundDelegate<Func<TSource, TDestination, IMapContext, TDestination>>(
+                className,
+                mapper,
+                ExistingDestinationMethodName,
+                new[] { typeof(TSource), typeof(TDestination), typeof(IMapContext) });
+
+            return new DynabeeTypedExistingDestinationMapInvoker<TSource, TDestination>(map);
+        }
+
+        private static object CreateTypedContextFreeMapInvoker(
+            IAssemblyContext context,
+            string className,
+            object mapper,
+            Type sourceType,
+            Type destinationType)
+            => CreateTypedContextFreeMapInvokerCoreMethod
+                .MakeGenericMethod(sourceType, destinationType)
+                .Invoke(null, new[] { context, className, mapper });
+
+        private static object CreateTypedContextFreeMapInvokerCore<TSource, TDestination>(
+            IAssemblyContext context,
+            string className,
+            object mapper)
+        {
+            var map = context.CreateBoundDelegate<Func<TSource, TDestination>>(
+                className,
+                mapper,
+                ContextFreeMethodName,
+                new[] { typeof(TSource) });
+
+            return new DynabeeTypedContextFreeMapInvoker<TSource, TDestination>(map);
+        }
+
+        private static object CreateTypedContextFreeExistingDestinationMapInvoker(
+            IAssemblyContext context,
+            string className,
+            object mapper,
+            Type sourceType,
+            Type destinationType)
+            => CreateTypedContextFreeExistingDestinationMapInvokerCoreMethod
+                .MakeGenericMethod(sourceType, destinationType)
+                .Invoke(null, new[] { context, className, mapper });
+
+        private static object CreateTypedContextFreeExistingDestinationMapInvokerCore<TSource, TDestination>(
+            IAssemblyContext context,
+            string className,
+            object mapper)
+        {
+            var map = context.CreateBoundDelegate<Func<TSource, TDestination, TDestination>>(
+                className,
+                mapper,
+                ContextFreeExistingDestinationMethodName,
+                new[] { typeof(TSource), typeof(TDestination) });
+
+            return new DynabeeTypedContextFreeExistingDestinationMapInvoker<TSource, TDestination>(map);
+        }
+
+        private static Func<object, IMapContext, object> CreateObjectMapper(
+            IAssemblyContext context,
+            string className,
+            object mapper,
+            Type sourceType)
+        {
+            var adapter = context.CreateObjectAdapter2(
+                className,
+                mapper,
+                nameof(IOctoMapper<object, object>.Map),
+                new[] { sourceType, typeof(IMapContext) });
+
+            return (source, mapContext) => adapter(source, mapContext);
         }
 
         private static void InjectDependency(BeeClassBuilder builder, string propertyName, Type dependencyType)

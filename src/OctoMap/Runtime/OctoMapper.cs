@@ -214,7 +214,7 @@ namespace OctoMap
                 throw new InvalidOperationException($"Compiled map '{compiledMap.MapperType.FullName}' does not support source set invocation.");
             }
 
-            return (TDestination)compiledMap.Invoker.Invoke(CreateSourceSetArguments(sources, CreateContext(compiledMap)));
+            return (TDestination)compiledMap.Invoker.Invoke(new SourceSetArgumentList(sources, CreateContext(compiledMap)));
         }
 
         /// <inheritdoc/>
@@ -276,22 +276,59 @@ namespace OctoMap
             => compiledMap.RequiresContext ? _contextFactory.Create() : null;
 
         /// <summary>
-        /// Creates the argument array required by dynamic source-set invocation.
+        /// Provides dynamic source-set arguments without allocating a new object array per map call.
         /// </summary>
-        /// <param name="sources">The source set.</param>
-        /// <param name="context">The mapping context.</param>
-        /// <returns>The invoker argument array.</returns>
-        private static object[] CreateSourceSetArguments(SourceSet sources, IMapContext context)
+        private sealed class SourceSetArgumentList : IReadOnlyList<object>
         {
-            var sourceCount = sources.Sources.Count;
-            var arguments = new object[sourceCount + 1];
-            for (var index = 0; index < sourceCount; index++)
+            private readonly SourceSet _sources;
+            private readonly IMapContext _context;
+
+            /// <summary>
+            /// Initializes a new instance of the <see cref="SourceSetArgumentList"/> class.
+            /// </summary>
+            /// <param name="sources">The source set.</param>
+            /// <param name="context">The mapping context.</param>
+            public SourceSetArgumentList(SourceSet sources, IMapContext context)
             {
-                arguments[index] = sources.Sources[index];
+                _sources = sources ?? throw new ArgumentNullException(nameof(sources));
+                _context = context;
             }
 
-            arguments[sourceCount] = context;
-            return arguments;
+            /// <inheritdoc/>
+            public int Count => _sources.Sources.Count + 1;
+
+            /// <inheritdoc/>
+            public object this[int index]
+            {
+                get
+                {
+                    var sourceCount = _sources.Sources.Count;
+                    if ((uint)index < (uint)sourceCount)
+                    {
+                        return _sources.Sources[index];
+                    }
+
+                    if (index == sourceCount)
+                    {
+                        return _context;
+                    }
+
+                    throw new ArgumentOutOfRangeException(nameof(index));
+                }
+            }
+
+            /// <inheritdoc/>
+            public IEnumerator<object> GetEnumerator()
+            {
+                for (var index = 0; index < Count; index++)
+                {
+                    yield return this[index];
+                }
+            }
+
+            /// <inheritdoc/>
+            System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator()
+                => GetEnumerator();
         }
     }
 }
