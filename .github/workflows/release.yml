@@ -9,7 +9,7 @@ env:
   DOTNET_TARGET: .
   NUGET_OUTPUT: ./nupkgs
   NUGET_SOURCE: https://api.nuget.org/v3/index.json
-  NUGET_USER: ${{ vars.NUGET_USER || 'Elysium' }}
+  NUGET_USER: ${{ vars.NUGET_USER || 'Mario.Perez.Blitz.13' }}
   RELEASE_BRANCH_PATTERN: ^releases/v[0-9]+\.[0-9]+\.[0-9]+$
   RELEASE_BRANCH_PREFIX: releases/
   RELEASE_NOTES_PATH: release_notes.txt
@@ -137,6 +137,15 @@ jobs:
             ${{ env.NUGET_OUTPUT }}/*.snupkg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate NuGet trusted publishing user
+        shell: bash
+        run: |
+          if [[ -z "$NUGET_USER" ]]; then
+            echo "Repository variable NUGET_USER must be set to the nuget.org username that created the Trusted Publishing policy."
+            echo "This is not necessarily the package owner, organization, GitHub repository owner, or policy name."
+            exit 1
+          fi
 
       - name: NuGet trusted publishing login
         uses: NuGet/login@v1
