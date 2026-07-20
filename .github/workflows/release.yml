@@ -55,19 +55,33 @@ jobs:
             exit 1
           fi
 
-      - name: Validate tag does not exist
+      - name: Inspect release tag
+        id: tag_state
         shell: bash
         run: |
           TAG="${{ steps.version.outputs.tag }}"
+          HEAD_SHA="$(git rev-parse HEAD)"
 
-          if git rev-parse "$TAG" >/dev/null 2>&1; then
-            echo "Tag $TAG already exists locally."
-            exit 1
-          fi
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
 
           if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
-            echo "Tag $TAG already exists on origin."
-            exit 1
+            git fetch --force origin "refs/tags/$TAG:refs/tags/$TAG"
+            TAG_SHA="$(git rev-list -n 1 "$TAG")"
+
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "tag_sha=$TAG_SHA" >> "$GITHUB_OUTPUT"
+
+            if [[ "$TAG_SHA" == "$HEAD_SHA" ]]; then
+              echo "matches_head=true" >> "$GITHUB_OUTPUT"
+              echo "Tag $TAG already points to $HEAD_SHA."
+            else
+              echo "matches_head=false" >> "$GITHUB_OUTPUT"
+              echo "Tag $TAG points to $TAG_SHA and will be moved to $HEAD_SHA."
+            fi
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "matches_head=false" >> "$GITHUB_OUTPUT"
+            echo "Tag $TAG does not exist and will be created at $HEAD_SHA."
           fi
 
       - name: Install .NET SDK
@@ -124,15 +138,26 @@ jobs:
           dotnet nuget push ./nupkgs/*.nupkg -k ${{ steps.nuget_login.outputs.NUGET_API_KEY }} -s https://api.nuget.org/v3/index.json --skip-duplicate
           dotnet nuget push ./nupkgs/*.snupkg -k ${{ steps.nuget_login.outputs.NUGET_API_KEY }} -s https://api.nuget.org/v3/index.json --skip-duplicate
 
-      - name: Create and push tag
+      - name: Create or update release tag
         shell: bash
         run: |
           TAG="${{ steps.version.outputs.tag }}"
+          HEAD_SHA="${{ steps.tag_state.outputs.head_sha }}"
+          TAG_EXISTS="${{ steps.tag_state.outputs.exists }}"
+          TAG_MATCHES_HEAD="${{ steps.tag_state.outputs.matches_head }}"
 
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          git tag "$TAG"
-          git push origin "$TAG"
+
+          if [[ "$TAG_EXISTS" == "true" && "$TAG_MATCHES_HEAD" == "true" ]]; then
+            echo "Tag $TAG already points to $HEAD_SHA. Nothing to update."
+          elif [[ "$TAG_EXISTS" == "true" ]]; then
+            git tag --force "$TAG" "$HEAD_SHA"
+            git push --force origin "refs/tags/$TAG"
+          else
+            git tag --force "$TAG" "$HEAD_SHA"
+            git push origin "refs/tags/$TAG"
+          fi
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
