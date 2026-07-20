@@ -916,7 +916,8 @@ namespace OctoMap.Generation.Dynabee
                 {
                     if (assignment.SourceCollectionShape == CollectionShape.Enumerable
                         && !CanIndexSourceCollection(sourceCollection.Type)
-                        && assignment.DestinationCollectionShape != CollectionShape.Array)
+                        && assignment.DestinationCollectionShape != CollectionShape.Array
+                        && !UsesArrayDestinationCollection(assignment))
                     {
                         whenFalse.Assign(destinationCollection, whenFalse.New(destinationCollectionType));
                         whenFalse.ForEach(
@@ -932,13 +933,14 @@ namespace OctoMap.Generation.Dynabee
 
                     var indexedSourceCollection = NormalizeSourceCollection(whenFalse, sourceCollection, assignment);
                     var indexedSourceShape = GetIndexedSourceShape(indexedSourceCollection.Type, assignment.SourceCollectionShape);
-                    var count = BuildCollectionCountValue(whenFalse, indexedSourceCollection, indexedSourceShape);
+                    var count = whenFalse.DeclareLocal($"count_{assignment.DestinationProperty.Name}", typeof(int));
+                    whenFalse.Assign(count, BuildCollectionCountValue(whenFalse, indexedSourceCollection, indexedSourceShape));
                     whenFalse.Assign(destinationCollection, CreateDestinationCollection(whenFalse, assignment, count));
 
                     var index = whenFalse.DeclareLocal($"index_{assignment.DestinationProperty.Name}", typeof(int));
                     whenFalse.For(
                         initialize: loop => loop.Assign(index, loop.Constant(0)),
-                        condition: loop => loop.LessThan(index, BuildCollectionCountValue(loop, indexedSourceCollection, indexedSourceShape)),
+                        condition: loop => loop.LessThan(index, count),
                         increment: loop => loop.Assign(index, loop.Add(index, loop.Constant(1))),
                         body: loop =>
                         {
@@ -983,6 +985,7 @@ namespace OctoMap.Generation.Dynabee
             MemberAssignmentPlan assignment,
             IBeeValueExpression count)
             => assignment.DestinationCollectionShape == CollectionShape.Array
+                || UsesArrayDestinationCollection(assignment)
                 ? body.NewArray(assignment.DestinationElementType, count)
                 : assignment.DestinationCollectionShape == CollectionShape.Set
                     ? body.New(GetDestinationCollectionRuntimeType(assignment))
@@ -1068,7 +1071,8 @@ namespace OctoMap.Generation.Dynabee
             IBeeValueExpression destinationItem,
             MemberAssignmentPlan assignment)
         {
-            if (assignment.DestinationCollectionShape == CollectionShape.Array)
+            if (assignment.DestinationCollectionShape == CollectionShape.Array
+                || destinationCollection.Type.IsArray)
             {
                 body.Assign(body.Index(destinationCollection, index), destinationItem);
                 return;
@@ -1092,9 +1096,30 @@ namespace OctoMap.Generation.Dynabee
         private static Type GetDestinationCollectionRuntimeType(MemberAssignmentPlan assignment)
             => assignment.DestinationCollectionShape == CollectionShape.Array
                 ? assignment.DestinationProperty.PropertyType
+                : UsesArrayDestinationCollection(assignment)
+                    ? assignment.DestinationElementType.MakeArrayType()
                 : assignment.DestinationCollectionShape == CollectionShape.Set
                     ? typeof(HashSet<>).MakeGenericType(assignment.DestinationElementType)
                 : typeof(List<>).MakeGenericType(assignment.DestinationElementType);
+
+        private static bool UsesArrayDestinationCollection(MemberAssignmentPlan assignment)
+        {
+            if (assignment.DestinationCollectionShape != CollectionShape.Enumerable)
+            {
+                return false;
+            }
+
+            var destinationType = assignment.DestinationProperty.PropertyType;
+            if (!destinationType.IsGenericType)
+            {
+                return false;
+            }
+
+            var genericDefinition = destinationType.GetGenericTypeDefinition();
+            return genericDefinition == typeof(IEnumerable<>)
+                || genericDefinition == typeof(IReadOnlyCollection<>)
+                || genericDefinition == typeof(IReadOnlyList<>);
+        }
 
         private static IBeeValueExpression BuildNestedMapValue(
             IBeeMethodBodyBuilder body,
