@@ -3,6 +3,17 @@ name: Release to NuGet
 on:
   workflow_dispatch:
 
+env:
+  CHANGELOG_PATH: CHANGELOG.md
+  CONFIGURATION: Release
+  DOTNET_TARGET: .
+  NUGET_OUTPUT: ./nupkgs
+  NUGET_SOURCE: https://api.nuget.org/v3/index.json
+  NUGET_USER: ${{ vars.NUGET_USER || 'Elysium' }}
+  RELEASE_BRANCH_PATTERN: ^releases/v[0-9]+\.[0-9]+\.[0-9]+$
+  RELEASE_BRANCH_PREFIX: releases/
+  RELEASE_NOTES_PATH: release_notes.txt
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -22,12 +33,12 @@ jobs:
         run: |
           BRANCH="${GITHUB_REF_NAME}"
 
-          if [[ ! "$BRANCH" =~ ^releases/v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Production releases must run from a branch named releases/vX.Y.Z. Current branch: $BRANCH"
+          if [[ ! "$BRANCH" =~ $RELEASE_BRANCH_PATTERN ]]; then
+            echo "Production releases must run from a branch matching $RELEASE_BRANCH_PATTERN. Current branch: $BRANCH"
             exit 1
           fi
 
-          TAG="${BRANCH#releases/}"
+          TAG="${BRANCH#"$RELEASE_BRANCH_PREFIX"}"
           VERSION="${TAG#v}"
 
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
@@ -37,10 +48,10 @@ jobs:
         shell: bash
         run: |
           TAG="${{ steps.version.outputs.tag }}"
-          TAG_LINE=$(grep -m1 -E "^## \\[$TAG\\]" CHANGELOG.md || true)
+          TAG_LINE=$(grep -m1 -E "^## \\[$TAG\\]" "$CHANGELOG_PATH" || true)
 
           if [[ -z "$TAG_LINE" ]]; then
-            echo "CHANGELOG.md must contain a section for $TAG before deploying."
+            echo "$CHANGELOG_PATH must contain a section for $TAG before deploying."
             exit 1
           fi
 
@@ -48,40 +59,11 @@ jobs:
             $0 == tag_line { in_section=1; next }
             in_section && /^## / { exit }
             in_section
-          ' CHANGELOG.md > release_notes.txt
+          ' "$CHANGELOG_PATH" > "$RELEASE_NOTES_PATH"
 
-          if [[ ! -s release_notes.txt ]]; then
-            echo "CHANGELOG.md section for $TAG is empty."
+          if [[ ! -s "$RELEASE_NOTES_PATH" ]]; then
+            echo "$CHANGELOG_PATH section for $TAG is empty."
             exit 1
-          fi
-
-      - name: Inspect release tag
-        id: tag_state
-        shell: bash
-        run: |
-          TAG="${{ steps.version.outputs.tag }}"
-          HEAD_SHA="$(git rev-parse HEAD)"
-
-          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
-
-          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
-            git fetch --force origin "refs/tags/$TAG:refs/tags/$TAG"
-            TAG_SHA="$(git rev-list -n 1 "$TAG")"
-
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "tag_sha=$TAG_SHA" >> "$GITHUB_OUTPUT"
-
-            if [[ "$TAG_SHA" == "$HEAD_SHA" ]]; then
-              echo "matches_head=true" >> "$GITHUB_OUTPUT"
-              echo "Tag $TAG already points to $HEAD_SHA."
-            else
-              echo "matches_head=false" >> "$GITHUB_OUTPUT"
-              echo "Tag $TAG points to $TAG_SHA and will be moved to $HEAD_SHA."
-            fi
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-            echo "matches_head=false" >> "$GITHUB_OUTPUT"
-            echo "Tag $TAG does not exist and will be created at $HEAD_SHA."
           fi
 
       - name: Install .NET SDK
@@ -93,67 +75,50 @@ jobs:
             10.0.x
 
       - name: Restore
-        run: dotnet restore
+        run: dotnet restore "$DOTNET_TARGET"
 
       - name: Build
         run: >
-          dotnet build
+          dotnet build "$DOTNET_TARGET"
           --no-restore
-          --configuration Release
+          --configuration "$CONFIGURATION"
           /p:Version=${{ steps.version.outputs.version }}
           /p:PackageVersion=${{ steps.version.outputs.version }}
           /p:MinVerVersionOverride=${{ steps.version.outputs.version }}
 
       - name: Test
-        run: dotnet test --no-build --configuration Release --verbosity normal
+        run: dotnet test "$DOTNET_TARGET" --no-build --configuration "$CONFIGURATION" --verbosity normal
 
-      - name: Pack OctoMap
+      - name: Pack NuGet packages
         run: >
-          dotnet pack src/OctoMap/OctoMap.csproj
+          dotnet pack "$DOTNET_TARGET"
           --no-build
-          --configuration Release
-          --output ./nupkgs
+          --configuration "$CONFIGURATION"
+          --output "$NUGET_OUTPUT"
           /p:Version=${{ steps.version.outputs.version }}
           /p:PackageVersion=${{ steps.version.outputs.version }}
           /p:MinVerVersionOverride=${{ steps.version.outputs.version }}
-
-      - name: Pack OctoMap analyzers
-        run: >
-          dotnet pack src/OctoMap.Analyzers/OctoMap.Analyzers.csproj
-          --no-build
-          --configuration Release
-          --output ./nupkgs
-          /p:Version=${{ steps.version.outputs.version }}
-          /p:PackageVersion=${{ steps.version.outputs.version }}
-          /p:MinVerVersionOverride=${{ steps.version.outputs.version }}
-
-      - name: NuGet trusted publishing login
-        uses: NuGet/login@v1
-        id: nuget_login
-        with:
-          user: Elysium
-
-      - name: Push to NuGet
-        run: |
-          dotnet nuget push ./nupkgs/*.nupkg -k ${{ steps.nuget_login.outputs.NUGET_API_KEY }} -s https://api.nuget.org/v3/index.json --skip-duplicate
-          dotnet nuget push ./nupkgs/*.snupkg -k ${{ steps.nuget_login.outputs.NUGET_API_KEY }} -s https://api.nuget.org/v3/index.json --skip-duplicate
 
       - name: Create or update release tag
         shell: bash
         run: |
           TAG="${{ steps.version.outputs.tag }}"
-          HEAD_SHA="${{ steps.tag_state.outputs.head_sha }}"
-          TAG_EXISTS="${{ steps.tag_state.outputs.exists }}"
-          TAG_MATCHES_HEAD="${{ steps.tag_state.outputs.matches_head }}"
+          HEAD_SHA="$(git rev-parse HEAD)"
 
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
 
-          if [[ "$TAG_EXISTS" == "true" && "$TAG_MATCHES_HEAD" == "true" ]]; then
-            echo "Tag $TAG already points to $HEAD_SHA. Nothing to update."
-          elif [[ "$TAG_EXISTS" == "true" ]]; then
-            git tag --force "$TAG" "$HEAD_SHA"
-            git push --force origin "refs/tags/$TAG"
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            git fetch --force origin "refs/tags/$TAG:refs/tags/$TAG"
+            TAG_SHA="$(git rev-list -n 1 "$TAG")"
+
+            if [[ "$TAG_SHA" == "$HEAD_SHA" ]]; then
+              echo "Tag $TAG already points to $HEAD_SHA. Nothing to update."
+            else
+              echo "Tag $TAG points to $TAG_SHA and will be moved to $HEAD_SHA."
+              git tag --force "$TAG" "$HEAD_SHA"
+              git push --force origin "refs/tags/$TAG"
+            fi
           else
             git tag --force "$TAG" "$HEAD_SHA"
             git push origin "refs/tags/$TAG"
@@ -164,11 +129,38 @@ jobs:
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: ${{ steps.version.outputs.tag }}
-          body_path: release_notes.txt
+          body_path: ${{ env.RELEASE_NOTES_PATH }}
           draft: false
           prerelease: false
           files: |
-            ./nupkgs/*.nupkg
-            ./nupkgs/*.snupkg
+            ${{ env.NUGET_OUTPUT }}/*.nupkg
+            ${{ env.NUGET_OUTPUT }}/*.snupkg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: NuGet trusted publishing login
+        uses: NuGet/login@v1
+        id: nuget_login
+        with:
+          user: ${{ env.NUGET_USER }}
+
+      - name: Push to NuGet
+        shell: bash
+        run: |
+          shopt -s nullglob
+
+          packages=("$NUGET_OUTPUT"/*.nupkg)
+          symbols=("$NUGET_OUTPUT"/*.snupkg)
+
+          if (( ${#packages[@]} == 0 )); then
+            echo "No .nupkg files were found in $NUGET_OUTPUT."
+            exit 1
+          fi
+
+          for package in "${packages[@]}"; do
+            dotnet nuget push "$package" -k ${{ steps.nuget_login.outputs.NUGET_API_KEY }} -s "$NUGET_SOURCE" --skip-duplicate
+          done
+
+          for symbol in "${symbols[@]}"; do
+            dotnet nuget push "$symbol" -k ${{ steps.nuget_login.outputs.NUGET_API_KEY }} -s "$NUGET_SOURCE" --skip-duplicate
+          done
