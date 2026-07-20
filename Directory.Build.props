@@ -34,7 +34,7 @@
 
   <PropertyGroup>
     <Version Condition="'$(MinVerVersion)' != ''">$(MinVerVersion)</Version>
-    <Version Condition="'$(MinVerVersion)' == ''">1.0.0-alpha.0</Version>
+    <Version Condition="'$(MinVerVersion)' == ''">1.0.0</Version>
     <MinVerTagPrefix>v</MinVerTagPrefix>
     <MinVerMinimumMajorMinor>1.0</MinVerMinimumMajorMinor>
     <MinVerBuildMetadata>build.{DateTime:yyyyMMddHHmmss}</MinVerBuildMetadata>

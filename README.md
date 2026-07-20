@@ -1,6 +1,6 @@
 # OctoMap
 
-[![Build](https://github.com/mape1402/octomap/actions/workflows/publish.yaml/badge.svg)](https://github.com/mape1402/octomap/actions/workflows/publish.yaml)
+[![Build](https://github.com/mape1402/octomap/actions/workflows/CI.yml/badge.svg)](https://github.com/mape1402/octomap/actions/workflows/CI.yml)
 [![NuGet](https://img.shields.io/nuget/v/OctoMap.svg)](https://www.nuget.org/packages/OctoMap)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
@@ -60,10 +60,16 @@ This boundary keeps OctoMap focused on mapping behavior while allowing DynaBee t
 
 ## Installation
 
-OctoMap is currently in alpha. Once packaged, installation will use the normal NuGet flow:
+Install OctoMap from NuGet:
 
 ```bash
-dotnet add package OctoMap --prerelease
+dotnet add package OctoMap --version 1.0.0
+```
+
+Optional analyzer diagnostics are published separately:
+
+```bash
+dotnet add package OctoMap.Analyzers --version 1.0.0
 ```
 
 For local development, reference the project directly or use the solution in this repository.
@@ -1079,13 +1085,26 @@ Current warm flat mapping measurements on .NET 8 have OctoMap in the same range 
 - Mapster: about 32 ns, 56 B allocated
 - AutoMapper: about 89 ns, 56 B allocated
 
+Current collection mapping measurements on .NET 8 for a read-only list destination show OctoMap ahead of AutoMapper and Mapster with lower allocations:
+
+- OctoMap: about 229 ns, 448 B allocated
+- AutoMapper: about 376 ns, 704 B allocated
+- Mapster: about 434 ns, 704 B allocated
+
 ```bash
 dotnet run -c Release -f net8.0 --project benchmarks/OctoMap.Benchmarks/OctoMap.Benchmarks.csproj -- --filter *
 ```
 
-## Current Status
+## Release Status
 
-OctoMap is in early alpha. The core runtime path, explicit maps, runtime implicit single-source maps, naming conventions, interface-based map registration, attribute-based registration, explicit multi-source maps, nested mapping, collection mapping, collection element conversion, DI resolvers, value converters, lifecycle actions, conditional mapping, inheritance map inclusion, open generic map resolution, validation, first-pass projection mapping, first-pass plan diagnostics, tests, sample project, and DynaBee-backed generation are implemented.
+OctoMap 1.0.0 is the first stable release. The core runtime path, explicit maps, runtime implicit single-source maps, naming conventions, interface-based map registration, attribute-based registration, explicit multi-source maps, nested mapping, collection mapping, collection element conversion, DI resolvers, value converters, lifecycle actions, conditional mapping, inheritance map inclusion, open generic map resolution, validation, projection mapping, plan diagnostics, tests, sample project, and DynaBee-backed generation are implemented.
+
+The 1.0.0 boundaries are intentional:
+
+- Multi-source maps must be configured explicitly.
+- Projection focuses on provider-friendly expression trees and rejects runtime-only features with clear errors.
+- `ForPath(...)` is runtime-only.
+- Reverse mapping supports basic reversible single-source rules, not resolvers, converters, complex expressions, flattening, unflattening, or multi-source maps.
 
 Upcoming areas include:
 
