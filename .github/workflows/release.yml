@@ -117,7 +117,12 @@ jobs:
         uses: NuGet/login@v1
         id: nuget_login
         with:
-          user: ${{ vars.NUGET_USER || github.repository_owner }}
+          user: GitHubActions
+
+      - name: Push to NuGet
+        run: |
+          dotnet nuget push ./nupkgs/*.nupkg -k ${{ steps.nuget_login.outputs.NUGET_API_KEY }} -s https://api.nuget.org/v3/index.json --skip-duplicate
+          dotnet nuget push ./nupkgs/*.snupkg -k ${{ steps.nuget_login.outputs.NUGET_API_KEY }} -s https://api.nuget.org/v3/index.json --skip-duplicate
 
       - name: Create and push tag
         shell: bash
@@ -142,8 +147,3 @@ jobs:
             ./nupkgs/*.snupkg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Push to NuGet
-        run: |
-          dotnet nuget push ./nupkgs/*.nupkg -k ${{ steps.nuget_login.outputs.NUGET_API_KEY }} -s https://api.nuget.org/v3/index.json --skip-duplicate
-          dotnet nuget push ./nupkgs/*.snupkg -k ${{ steps.nuget_login.outputs.NUGET_API_KEY }} -s https://api.nuget.org/v3/index.json --skip-duplicate
