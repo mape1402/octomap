@@ -27,6 +27,7 @@ OctoMap is designed for applications that want AutoMapper-style configuration, b
 - Supports configurable member naming conventions.
 - Supports explicit registration organization through profiles, assembly scans, filters, duplicate policies, and configuration diagnostics.
 - Provides first-pass analyzer tooling through `OctoMap.Analyzers`.
+- Provides test-host helpers and mapping assertions through `OctoMap.Testing`.
 - Uses DynaBee-generated method bodies and invokers for hot execution paths.
 - Integrates with `Microsoft.Extensions.DependencyInjection`.
 
@@ -63,13 +64,19 @@ This boundary keeps OctoMap focused on mapping behavior while allowing DynaBee t
 Install OctoMap from NuGet:
 
 ```bash
-dotnet add package OctoMap --version 1.0.0
+dotnet add package OctoMap --version 1.1.0
 ```
 
 Optional analyzer diagnostics are published separately:
 
 ```bash
-dotnet add package OctoMap.Analyzers --version 1.0.0
+dotnet add package OctoMap.Analyzers --version 1.1.0
+```
+
+Optional testing helpers are published separately:
+
+```bash
+dotnet add package OctoMap.Testing --version 1.1.0
 ```
 
 For local development, reference the project directly or use the solution in this repository.
@@ -121,6 +128,64 @@ Map objects:
 ```csharp
 var dto = mapper.Map<Customer, CustomerDto>(customer);
 ```
+
+## Testing Package
+
+`OctoMap.Testing` helps test real OctoMap profiles without forcing test hosts to duplicate application bootstrapping code.
+
+Register OctoMap for tests from one or more assemblies:
+
+```csharp
+using Microsoft.Extensions.DependencyInjection;
+using OctoMap.Testing;
+
+services.AddOctoMapTesting(typeof(CustomerMappingProfile).Assembly);
+```
+
+External test hosts can register the adapter-friendly contract:
+
+```csharp
+services.AddOctoMapTestingAdapter(typeof(CustomerMappingProfile).Assembly);
+```
+
+Resolve `IOctoMapTestingMapper` or `IOctoMapTestingAdapter` and validate the loaded profiles:
+
+```csharp
+var mapper = provider.GetRequiredService<IOctoMapTestingMapper>();
+
+await mapper.AssertConfigurationIsValidAsync();
+```
+
+Map a source into a new destination:
+
+```csharp
+var response = await mapper.MapAsync<CustomerResponse>(customer);
+```
+
+Update an existing destination object:
+
+```csharp
+await mapper.MapAsync(request, existingCustomer);
+```
+
+Assert common mapping expectations without taking a dependency on a specific test framework:
+
+```csharp
+response.ShouldMapFrom(customer)
+    .Matching(x => x.Id)
+    .Matching(x => x.Name);
+```
+
+Testing helpers include:
+
+- profile registration assertions
+- configured map assertions with diagnostics for missing maps
+- source-to-destination projection assertions
+- existing destination update mapping
+- nested value assertions
+- collection value assertions
+
+`OctoMap.Testing` does not depend on TurtlePath.
 
 ## Configuration Organization
 

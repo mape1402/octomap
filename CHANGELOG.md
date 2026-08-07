@@ -1,5 +1,11 @@
 # Changelog
 
+## [v1.1.0] - 2026-08-07
+
+### Added
+
+- `OctoMap.Testing` package with DI registration helpers, async mapper adapter APIs, configuration validation helpers, projection helpers, and mapping assertions for profile tests.
+
 ## [v1.0.0] - 2026-07-20
 
 ### Added
