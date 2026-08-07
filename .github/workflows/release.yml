@@ -9,7 +9,7 @@ env:
   DOTNET_TARGET: .
   NUGET_OUTPUT: ./nupkgs
   NUGET_SOURCE: https://api.nuget.org/v3/index.json
-  NUGET_USER: ${{ vars.NUGET_USER || 'Mario.Perez.Blitz.13' }}
+  NUGET_USER: ${{ vars.NUGET_USER }}
   RELEASE_BRANCH_PATTERN: ^releases/v[0-9]+\.[0-9]+\.[0-9]+$
   RELEASE_BRANCH_PREFIX: releases/
   RELEASE_NOTES_PATH: release_notes.txt
