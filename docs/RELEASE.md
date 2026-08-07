@@ -28,9 +28,8 @@ Before publishing a release:
 3. Run `dotnet restore`.
 4. Run `dotnet build --configuration Release`.
 5. Run `dotnet test --configuration Release --no-build`.
-6. Run `dotnet pack src/OctoMap/OctoMap.csproj --configuration Release --output artifacts/package`.
-7. Run `dotnet pack src/OctoMap.Analyzers/OctoMap.Analyzers.csproj --configuration Release --output artifacts/package`.
-8. Run the `Release to NuGet` workflow manually from the release branch.
+6. Run `dotnet pack . --configuration Release --output artifacts/package`.
+7. Run the `Release to NuGet` workflow manually from the release branch.
 
 ## Package Quality
 
@@ -48,4 +47,4 @@ The package build must include:
 
 Pull requests and pushes to `main` run restore, build, and test. This is the trunk-based validation path.
 
-Publishing to NuGet is only allowed from a manually dispatched workflow on a branch named `releases/vX.Y.Z` and requires `NUGET_API_KEY`.
+Publishing to NuGet is only allowed from a manually dispatched workflow on a branch named `releases/vX.Y.Z` and uses NuGet Trusted Publishing.
