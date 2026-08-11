@@ -92,6 +92,24 @@ namespace OctoMap.Tests
             Assert.Equal(12.34m, destination.RoundedAmount);
         }
 
+        [Fact]
+        public void MapFrom_Uses_Enum_And_Primitive_Constants()
+        {
+            var services = new ServiceCollection();
+            services.AddOctoMap(typeof(ConstantRuleProfile).Assembly);
+
+            var provider = services.BuildServiceProvider();
+            var mapper = provider.GetRequiredService<IOctoMapper>();
+
+            var destination = mapper.Map<ConstantRuleSource, ConstantRuleDestination>(new ConstantRuleSource());
+
+            Assert.Equal(Alignment.Hero, destination.OwnerAlignment);
+            Assert.True(destination.Active);
+            Assert.Equal("automation", destination.Source);
+            Assert.Equal(42, destination.Score);
+            Assert.Equal(7, destination.OptionalScore);
+        }
+
         public sealed class MemberRuleProfile : OctoMapProfile
         {
             public override void Configure(IOctoMapConfigurationBuilder builder)
@@ -122,6 +140,19 @@ namespace OctoMap.Tests
                     .ForMember(x => x.NormalizedName, x => x.MapFrom(s => s.Name.Trim().ToUpperInvariant()))
                     .ForMember(x => x.Code, x => x.MapFrom(s => BuildCode(s.Prefix, s.Number)))
                     .ForMember(x => x.RoundedAmount, x => x.MapFrom(s => decimal.Round(s.Amount, 2)));
+            }
+        }
+
+        public sealed class ConstantRuleProfile : OctoMapProfile
+        {
+            public override void Configure(IOctoMapConfigurationBuilder builder)
+            {
+                builder.CreateMap<ConstantRuleSource, ConstantRuleDestination>()
+                    .ForMember(x => x.OwnerAlignment, x => x.MapFrom(_ => Alignment.Hero))
+                    .ForMember(x => x.Active, x => x.MapFrom(_ => true))
+                    .ForMember(x => x.Source, x => x.MapFrom(_ => "automation"))
+                    .ForMember(x => x.Score, x => x.MapFrom(_ => 42))
+                    .ForMember(x => x.OptionalScore, x => x.MapFrom(_ => (int?)7));
             }
         }
 
@@ -194,6 +225,32 @@ namespace OctoMap.Tests
             public string Code { get; set; }
 
             public decimal RoundedAmount { get; set; }
+        }
+
+        public sealed class ConstantRuleSource
+        {
+        }
+
+        public sealed class ConstantRuleDestination
+        {
+            public Alignment OwnerAlignment { get; set; }
+
+            public bool Active { get; set; }
+
+            public string Source { get; set; }
+
+            public int Score { get; set; }
+
+            public int? OptionalScore { get; set; }
+        }
+
+        public enum Alignment
+        {
+            Unknown = 0,
+
+            Hero = 1,
+
+            Villain = 2
         }
     }
 }

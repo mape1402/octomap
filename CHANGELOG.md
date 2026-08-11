@@ -1,5 +1,11 @@
 # Changelog
 
+## [v1.1.1] - 2026-08-11
+
+### Fixed
+
+- Added safe constant emission for `MapFrom` and `UseValue` values including enums, primitive values, nullable primitives, `DateTime`, `DateTimeOffset`, and `Guid`.
+
 ## [v1.1.0] - 2026-08-07
 
 ### Added

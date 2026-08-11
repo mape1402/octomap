@@ -610,17 +610,55 @@ namespace OctoMap.Validation
                 return;
             }
 
-            if (!targetType.IsAssignableFrom(value.GetType()))
+            if (!CanAssignConstantValue(value, targetType))
             {
                 issues.Add(CreateIssue(map, memberName, $"The {valueKind} type '{value.GetType().FullName}' cannot be assigned to member '{memberName}' of type '{targetType.FullName}'."));
                 return;
             }
 
-            if (value is not string && value is not int && value is not bool && value is not decimal)
+            if (!IsSupportedConstantValue(value, targetType))
             {
                 issues.Add(CreateIssue(map, memberName, $"The {valueKind} type '{value.GetType().FullName}' is not supported by the current OctoMap value emitter."));
             }
         }
+
+        private static bool CanAssignConstantValue(object value, Type targetType)
+        {
+            var valueType = value.GetType();
+            if (targetType.IsAssignableFrom(valueType))
+            {
+                return true;
+            }
+
+            var nullableType = Nullable.GetUnderlyingType(targetType);
+            return nullableType != null && nullableType == valueType;
+        }
+
+        private static bool IsSupportedConstantValue(object value, Type targetType)
+        {
+            var valueType = Nullable.GetUnderlyingType(targetType) ?? value.GetType();
+            return valueType.IsEnum
+                || valueType == typeof(string)
+                || valueType == typeof(bool)
+                || IsSupportedNumericConstantType(valueType)
+                || valueType == typeof(char)
+                || valueType == typeof(DateTime)
+                || valueType == typeof(DateTimeOffset)
+                || valueType == typeof(Guid);
+        }
+
+        private static bool IsSupportedNumericConstantType(Type type)
+            => type == typeof(byte)
+                || type == typeof(sbyte)
+                || type == typeof(short)
+                || type == typeof(ushort)
+                || type == typeof(int)
+                || type == typeof(uint)
+                || type == typeof(long)
+                || type == typeof(ulong)
+                || type == typeof(float)
+                || type == typeof(double)
+                || type == typeof(decimal);
 
         private static bool CanWrite(PropertyInfo property)
             => property.CanWrite && property.SetMethod != null && property.SetMethod.IsPublic;
