@@ -45,6 +45,23 @@ namespace OctoMap.Tests
             Assert.Contains(exception.Report.Issues, x => x.MemberName == nameof(ValidationDestination.Name));
         }
 
+        [Fact]
+        public void AssertValid_Reports_Map_And_Type_For_Unsupported_Constant_Value()
+        {
+            var services = new ServiceCollection();
+            services.AddOctoMap(typeof(UnsupportedConstantProfile).Assembly);
+
+            var provider = services.BuildServiceProvider();
+            var configuration = provider.GetRequiredService<IOctoMapConfiguration>();
+
+            var exception = Assert.Throws<OctoMapValidationException>(() => configuration.AssertValid());
+
+            Assert.Contains(typeof(ValidationSource).FullName, exception.Message);
+            Assert.Contains(typeof(UnsupportedConstantDestination).FullName, exception.Message);
+            Assert.Contains(nameof(UnsupportedConstantDestination.Value), exception.Message);
+            Assert.Contains(typeof(UnsupportedConstant).FullName, exception.Message);
+        }
+
         public sealed class InvalidConstructorProfile : OctoMapProfile
         {
             public override void Configure(IOctoMapConfigurationBuilder builder)
@@ -59,6 +76,15 @@ namespace OctoMap.Tests
             {
                 builder.CreateMap<ValidationSource, ValidationDestination>()
                     .ForMember(x => x.Name, x => x.MapFrom(s => string.Join(",", new[] { s.Name })));
+            }
+        }
+
+        public sealed class UnsupportedConstantProfile : OctoMapProfile
+        {
+            public override void Configure(IOctoMapConfigurationBuilder builder)
+            {
+                builder.CreateMap<ValidationSource, UnsupportedConstantDestination>()
+                    .ForMember(x => x.Value, x => x.UseValue(new UnsupportedConstant()));
             }
         }
 
@@ -80,6 +106,15 @@ namespace OctoMap.Tests
             }
 
             public string Name { get; }
+        }
+
+        public sealed class UnsupportedConstantDestination
+        {
+            public UnsupportedConstant Value { get; set; }
+        }
+
+        public sealed class UnsupportedConstant
+        {
         }
     }
 }

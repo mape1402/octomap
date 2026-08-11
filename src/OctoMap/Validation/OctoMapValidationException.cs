@@ -23,6 +23,14 @@ namespace OctoMap
         private static string BuildMessage(OctoMapValidationReport report)
             => report == null || report.Issues.Count == 0
                 ? "OctoMap configuration is invalid."
-                : "OctoMap configuration is invalid: " + string.Join("; ", report.Issues.Select(x => x.Message));
+                : "OctoMap configuration is invalid: " + string.Join("; ", report.Issues.Select(FormatIssue));
+
+        private static string FormatIssue(OctoMapValidationIssue issue)
+        {
+            var source = issue.SourceType?.FullName ?? "<unknown source>";
+            var destination = issue.DestinationType?.FullName ?? "<unknown destination>";
+            var member = string.IsNullOrWhiteSpace(issue.MemberName) ? string.Empty : $".{issue.MemberName}";
+            return $"{source} -> {destination}{member}: {issue.Message}";
+        }
     }
 }

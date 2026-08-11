@@ -782,7 +782,7 @@ namespace OctoMap.Generation.Dynabee
             }
             else if (assignment.HasConstantValue)
             {
-                value = body.Constant(assignment.ConstantValue, assignment.DestinationProperty.PropertyType);
+                value = BuildConstantExpression(body, assignment.ConstantValue, assignment.DestinationProperty.PropertyType);
             }
             else if (assignment.SourceExpression != null)
             {
@@ -1322,7 +1322,7 @@ namespace OctoMap.Generation.Dynabee
                 case MemberExpression member:
                     return BuildMemberExpression(body, sources, member, sourceParameter, sourceIndex, valueParameter, valueExpression);
                 case ConstantExpression constant:
-                    return body.Constant(constant.Value, constant.Type);
+                    return BuildConstantExpression(body, constant.Value, constant.Type);
                 case BinaryExpression binary:
                     return BuildBinaryExpression(body, sources, binary, sourceParameter, sourceIndex, valueParameter, valueExpression);
                 case UnaryExpression unary when unary.NodeType == ExpressionType.Convert || unary.NodeType == ExpressionType.ConvertChecked:
@@ -1342,6 +1342,131 @@ namespace OctoMap.Generation.Dynabee
                     throw new NotSupportedException($"Expression node '{expression.NodeType}' is not supported by the current OctoMap expression generator.");
             }
         }
+
+        private static IBeeValueExpression BuildConstantExpression(
+            IBeeMethodBodyBuilder body,
+            object value,
+            Type constantType)
+        {
+            if (constantType == null)
+            {
+                throw new ArgumentNullException(nameof(constantType));
+            }
+
+            var nullableType = Nullable.GetUnderlyingType(constantType);
+            if (nullableType != null)
+            {
+                return value == null
+                    ? body.Default(constantType)
+                    : body.New(constantType, BuildConstantExpression(body, value, nullableType));
+            }
+
+            if (value == null)
+            {
+                return body.Constant(null, constantType);
+            }
+
+            if (constantType.IsEnum)
+            {
+                var underlyingType = Enum.GetUnderlyingType(constantType);
+                var underlyingValue = Convert.ChangeType(value, underlyingType);
+                return body.Convert(BuildIntegralConstantExpression(body, underlyingValue, underlyingType), constantType);
+            }
+
+            if (IsSupportedIntegralConstantType(constantType))
+            {
+                return BuildIntegralConstantExpression(body, value, constantType);
+            }
+
+            if (constantType == typeof(DateTime))
+            {
+                var dateTime = (DateTime)value;
+                return body.New(
+                    typeof(DateTime),
+                    body.Constant(dateTime.Ticks),
+                    BuildConstantExpression(body, dateTime.Kind, typeof(DateTimeKind)));
+            }
+
+            if (constantType == typeof(DateTimeOffset))
+            {
+                var dateTimeOffset = (DateTimeOffset)value;
+                return body.New(
+                    typeof(DateTimeOffset),
+                    body.Constant(dateTimeOffset.Ticks),
+                    body.New(typeof(TimeSpan), body.Constant(dateTimeOffset.Offset.Ticks)));
+            }
+
+            if (constantType == typeof(Guid))
+            {
+                var bytes = ((Guid)value).ToByteArray();
+                return body.New(
+                    typeof(Guid),
+                    body.Constant(BitConverter.ToInt32(bytes, 0)),
+                    body.Convert(body.Constant((int)BitConverter.ToInt16(bytes, 4)), typeof(short)),
+                    body.Convert(body.Constant((int)BitConverter.ToInt16(bytes, 6)), typeof(short)),
+                    body.Convert(body.Constant((int)bytes[8]), typeof(byte)),
+                    body.Convert(body.Constant((int)bytes[9]), typeof(byte)),
+                    body.Convert(body.Constant((int)bytes[10]), typeof(byte)),
+                    body.Convert(body.Constant((int)bytes[11]), typeof(byte)),
+                    body.Convert(body.Constant((int)bytes[12]), typeof(byte)),
+                    body.Convert(body.Constant((int)bytes[13]), typeof(byte)),
+                    body.Convert(body.Constant((int)bytes[14]), typeof(byte)),
+                    body.Convert(body.Constant((int)bytes[15]), typeof(byte)));
+            }
+
+            if (!IsSupportedDirectConstantType(constantType))
+            {
+                throw new NotSupportedException($"The constant expression type '{constantType.FullName}' is not supported by the current OctoMap value emitter.");
+            }
+
+            return body.Constant(value, constantType);
+        }
+
+        private static IBeeValueExpression BuildIntegralConstantExpression(
+            IBeeMethodBodyBuilder body,
+            object value,
+            Type constantType)
+        {
+            if (constantType == typeof(int))
+            {
+                return body.Constant((int)value);
+            }
+
+            if (constantType == typeof(long))
+            {
+                return body.Constant((long)value);
+            }
+
+            if (constantType == typeof(uint))
+            {
+                return body.Convert(body.Constant(unchecked((int)(uint)value)), constantType);
+            }
+
+            if (constantType == typeof(ulong))
+            {
+                return body.Convert(body.Constant(unchecked((long)(ulong)value)), constantType);
+            }
+
+            return body.Convert(body.Constant(Convert.ToInt32(value)), constantType);
+        }
+
+        private static bool IsSupportedIntegralConstantType(Type type)
+            => type == typeof(byte)
+                || type == typeof(sbyte)
+                || type == typeof(short)
+                || type == typeof(ushort)
+                || type == typeof(int)
+                || type == typeof(uint)
+                || type == typeof(long)
+                || type == typeof(ulong)
+                || type == typeof(char);
+
+        private static bool IsSupportedDirectConstantType(Type type)
+            => type == typeof(string)
+                || type == typeof(bool)
+                || type == typeof(float)
+                || type == typeof(double)
+                || type == typeof(decimal);
 
         private static IBeeValueExpression BuildConditionExpression(
             IBeeMethodBodyBuilder body,
